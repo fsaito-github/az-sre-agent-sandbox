@@ -37,11 +37,64 @@ O SRE Agent sabe que o Advisor recomenda algo, mas não analisa se é **seguro e
 
 ## Instalação
 
+### 1. Criar o Sub-Agent
+
 1. Acesse o SRE Agent no [Azure Portal](https://aka.ms/sreagent/portal)
 2. Vá em **Builder** → **Subagent Builder**
 3. Clique **+ Create subagent**
 4. Cole o conteúdo de [`subagent.yaml`](subagent.yaml)
 5. Salve e teste no **Playground**
+
+### 2. Upload dos Knowledge Files (Recomendado)
+
+Os knowledge files enriquecem o sub-agent com análise detalhada de impacto
+e mapa de dependências do ambiente. O sub-agent funciona sem eles, mas com
+eles as respostas são mais precisas e completas.
+
+1. No SRE Agent portal, vá em **Builder** → **Knowledge Base**
+2. Clique **Add file** e faça upload dos seguintes arquivos da pasta `knowledge/`:
+
+| Arquivo | O que contém | Tamanho |
+|---------|-------------|---------|
+| [`advisor-impact-playbook.md`](knowledge/advisor-impact-playbook.md) | Análise detalhada de impacto por tipo de recomendação do Advisor (AKS, ACR, Network, KV) | ~10 KB |
+| [`dependency-map.md`](knowledge/dependency-map.md) | Mapa completo de dependências: recurso Azure → serviço K8s → impacto de negócio | ~10 KB |
+| [`SKILL.md`](knowledge/SKILL.md) | Procedimento step-by-step que o agente segue para análise de impacto | ~6 KB |
+
+3. Aguarde a indexação (geralmente < 1 minuto)
+4. Teste: pergunte ao agente "Quais são as recomendações do Advisor?" — ele
+   deve referenciar os knowledge files na resposta
+
+### Como Funciona a Integração
+
+```
+Usuário: "Analise as recomendações do Advisor"
+    │
+    ↓
+SRE Agent (principal)
+    │
+    ├── handoff_description match → invoca Advisor Impact Analyzer
+    │
+    ↓
+Advisor Impact Analyzer (sub-agent)
+    │
+    ├── 1. Coleta recomendações via `az advisor recommendation list`
+    ├── 2. Consulta Knowledge Base (busca semântica):
+    │       ├── advisor-impact-playbook.md → dados de impacto pré-analisados
+    │       └── dependency-map.md → blast radius por recurso
+    ├── 3. Consulta SKILL.md → segue procedimento step-by-step
+    ├── 4. Usa tools (az cli, kubectl) → verifica estado real
+    ├── 5. Classifica risco e gera relatório
+    │
+    ↓
+Retorna análise ao chat
+    │
+    ├── Usuário pode pedir deep-dive em uma recomendação
+    ├── Usuário pode pedir para executar (handoff ao SRE Agent principal)
+    └── Usuário pode pedir análise de outro sub-agent:
+        ├── Security Auditor → aprofundar recomendações de segurança
+        ├── SLO Guardian → checar se error budget permite janela de manutenção
+        └── E-Commerce Expert → impacto de negócio durante downtime
+```
 
 ## Prompts de Teste
 
