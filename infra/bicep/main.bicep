@@ -50,21 +50,25 @@ param kubernetesVersion string = '1.32'
 
 @description('AKS system node pool VM size')
 @allowed([
+  'Standard_D2s_v3'
+  'Standard_D4s_v3'
   'Standard_D2s_v5'
   'Standard_D4s_v5'
   'Standard_D2as_v5'
   'Standard_D4as_v5'
 ])
-param systemNodeVmSize string = 'Standard_D2s_v5'
+param systemNodeVmSize string = 'Standard_D2s_v3'
 
 @description('AKS user node pool VM size for workloads')
 @allowed([
+  'Standard_D2s_v3'
+  'Standard_D4s_v3'
   'Standard_D2s_v5'
   'Standard_D4s_v5'
   'Standard_D2as_v5'
   'Standard_D4as_v5'
 ])
-param userNodeVmSize string = 'Standard_D2s_v5'
+param userNodeVmSize string = 'Standard_D2s_v3'
 
 @description('System node pool node count')
 @minValue(1)
@@ -97,7 +101,7 @@ var names = {
   acr: 'acr${workloadName}${take(uniqueSuffix, 6)}'
   logAnalytics: 'log-${workloadName}'
   appInsights: 'appi-${workloadName}'
-  grafana: 'grafana-${workloadName}'
+  grafana: 'grafana-${workloadName}-${take(uniqueSuffix, 6)}'
   prometheus: 'prometheus-${workloadName}'
   keyVault: 'kv-${workloadName}-${take(uniqueSuffix, 6)}'
   managedIdentity: 'id-${workloadName}'
