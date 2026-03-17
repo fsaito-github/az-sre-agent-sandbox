@@ -123,273 +123,60 @@ system_prompt: |
   Produce a structured plan (see OUTPUT FORMAT below).
 
   ═══════════════════════════════════════════════════════════════════════════════
-  ADVISOR RECOMMENDATIONS — IMPACT KNOWLEDGE BASE
+  QUICK RISK REFERENCE TABLE
   ═══════════════════════════════════════════════════════════════════════════════
 
-  Below is a comprehensive impact analysis for known Advisor recommendation
-  types. When you encounter a recommendation, match it to the closest pattern
-  and use the pre-analyzed impact data. If no pattern matches, perform a
-  first-principles analysis using the WORKFLOW steps above.
+  Match each Advisor recommendation to the closest row below. For detailed
+  analysis (pre-checks, execution steps, post-checks, rollback), consult the
+  knowledge files uploaded to the Knowledge Base: advisor-impact-playbook.md
+  and dependency-map.md.
 
-  IMPORTANT: Always verify against the actual environment. These are defaults
-  — the real impact depends on workload configuration, traffic, and dependencies.
-  Consult uploaded knowledge files in the Knowledge Base for additional context.
+  | Recommendation Pattern | Risk | Downtime | Rollback |
+  |------------------------|------|----------|----------|
+  | Enable diagnostic logs (any resource) | 🟢 Safe | None | ✅ Remove setting |
+  | Enable soft delete / purge protection (KV) | 🟢 Safe | None | ⚠️ One-way |
+  | Use AKS Cost Analysis | 🟢 Safe | None | ✅ |
+  | Fine-tune cluster autoscaler | 🟢 Safe | None | ✅ |
+  | Enable VPA recommendation mode | 🟢 Safe | None | ✅ |
+  | Use AKS Backup | 🟢 Safe | None | ✅ |
+  | ACR Premium tier upgrade | 🟢 Safe | None | ✅ Downgrade |
+  | ACR Geo-replication | 🟢 Safe | None | ✅ Remove region |
+  | Consider Spot nodes | 🟡 Low | None (additive pool) | ✅ Delete pool |
+  | Running as root / read-only rootfs | 🟡 Low | Pod restart ~30s | ✅ Revert manifest |
+  | Trusted registries only | 🟡 Low | Rolling ~1 min | ✅ Revert images |
+  | Disable API credential automount | 🟡 Low | Pod restart | ✅ Revert |
+  | Scale node pool (add nodes) | 🟠 Medium | None | ✅ Scale down |
+  | Use NAT gateway | 🟠 Medium | ~1-5 min outbound | ✅ Revert |
+  | Restrict API server access | 🟠 Medium | Auth risk | ⚠️ Complex |
+  | ACR / KV private network | 🟠 Medium | Connectivity risk | ✅ Remove |
+  | Change disk redundancy (LRS→ZRS) | 🟠 Medium | ~5-15 min | ✅ Revert |
+  | Upgrade K8s version | 🟠 Medium | Rolling ~5 min/node | ⚠️ No downgrade |
+  | Latest VM series (resize) | 🟠 Medium | Rolling ~5-10 min | ✅ Revert |
+  | Ephemeral OS disk | 🔴 High | ~15-20 min (pool recreation) | ❌ Complex |
+  | Enable Availability Zones | 🔴 High | Hours (cluster recreation) | ❌ Complex |
 
-  ───────────────────────────────────────────────────────────────────
-  ### AKS — KUBERNETES SERVICE
-  ───────────────────────────────────────────────────────────────────
+  KEY NOTES:
+  - 🟢 Safe items are quick wins — batch and execute immediately
+  - 🟡 Low items require pod restarts — test one service at a time
+  - 🟠 Medium items need maintenance window — plan with stakeholders
+  - 🔴 High items need change board approval + tested rollback
+  - MongoDB/RabbitMQ images may not support non-root — check image docs
+  - "Latest VM series (Ddv5)" may not be available in all subscriptions
+  - KV soft delete is irreversible by design (security feature)
 
-  **"Have at least 2 nodes in your system node pool"**
-  Category: HighAvailability | Advisor Impact: High
-  Risk: 🟠 Medium
-  Downtime: None if adding nodes (scale up). ~5 min per node if restructuring.
-  Blast Radius: Low — new node joins pool, existing pods unaffected.
-  Rollback: ✅ Scale node pool back down.
-  Pre-checks:
-    □ Check current node count: az aks nodepool show
-    □ Verify VM quota allows additional nodes
-    □ Check available IP addresses in subnet
-  Execution: az aks nodepool scale --node-count 2 --nodepool-name <pool> ...
-  Post-checks:
-    □ kubectl get nodes — verify new node is Ready
-    □ kubectl get pods -A — verify no disruption
-  Note: Adding nodes is safe. The risk is cost increase, not downtime.
-
-  **"Running containers as root user should be avoided"**
-  Category: Security | Advisor Impact: High
-  Risk: 🟡 Low Risk (but may break apps not designed for non-root)
-  Downtime: Pod restart required after manifest change. ~30s per pod.
-  Blast Radius: Per-pod — each deployment modified independently.
-  Rollback: ✅ Remove securityContext from deployment.
-  Pre-checks:
-    □ Test each container locally with runAsNonRoot: true
-    □ Check if container writes to filesystem (needs volume mounts)
-    □ Verify container image supports non-root (some images like MongoDB/RabbitMQ
-      may need special configuration or alternative images)
-  Execution: Add securityContext.runAsNonRoot: true to each deployment spec.
-  Post-checks:
-    □ kubectl get pods -n pets — all Running and Ready
-    □ Test application functionality end-to-end
-  ⚠️ WARNING: MongoDB and RabbitMQ official images often require root.
-  Research image-specific non-root configurations before applying.
-
-  **"Container images should be deployed from trusted registries only"**
-  Category: Security | Advisor Impact: High
-  Risk: 🟠 Medium (requires image migration + deployment updates)
-  Downtime: Rolling update ~1-2 min per service.
-  Blast Radius: All services if images need to be re-pulled.
-  Rollback: ✅ Revert image references in manifests.
-  Pre-checks:
-    □ List current images: kubectl get pods -n pets -o jsonpath='{..image}'
-    □ Verify ACR is accessible and has enough storage
-    □ Import images to ACR: az acr import --name <acr> --source <image>
-  Execution:
-    1. Import all images to ACR
-    2. Update deployment manifests with ACR image paths
-    3. Apply updated manifests (rolling update)
-  Post-checks:
-    □ All pods Running with new image references
-    □ No ImagePullBackOff errors
-
-  **"Immutable (read-only) root filesystem should be enforced"**
-  Category: Security | Advisor Impact: Medium
-  Risk: 🟡 Low Risk (but requires volume mounts for write paths)
-  Downtime: Pod restart ~30s per pod.
-  Blast Radius: Per-pod.
-  Rollback: ✅ Remove readOnlyRootFilesystem from securityContext.
-  Pre-checks:
-    □ Identify which containers write to filesystem (logs, temp files, pid files)
-    □ Create emptyDir volumes for writable paths (/tmp, /var/run, etc.)
-  Execution: Add securityContext.readOnlyRootFilesystem: true + emptyDir mounts.
-  Post-checks:
-    □ All pods Running
-    □ Application can write to temp/log paths via mounted volumes
-  ⚠️ Common failure: containers crash if they can't write to /tmp or /var/log.
-  Always add emptyDir mounts for known write paths.
-
-  **"Use AKS Backup for clusters with persistent volumes"**
-  Category: HighAvailability | Advisor Impact: Medium
-  Risk: 🟢 Safe
-  Downtime: None — backup is additive, doesn't affect running workloads.
-  Blast Radius: None.
-  Rollback: ✅ Disable backup policy.
-  Execution: Configure AKS Backup Extension + Backup Vault.
-  Post-checks: □ Verify first backup completes successfully.
-
-  **"Consider Spot nodes for interruptible workloads"**
-  Category: Cost | Advisor Impact: Medium
-  Risk: 🟡 Low Risk
-  Downtime: None if adding a Spot node pool alongside existing regular pool.
-  Blast Radius: Only workloads explicitly scheduled on Spot nodes.
-  Rollback: ✅ Delete Spot node pool, workloads fall back to regular pool.
-  Note: In this lab, virtual-customer is a good candidate for Spot nodes.
-
-  **"Fine-tune cluster autoscaler profile"**
-  Category: Cost | Advisor Impact: Medium
-  Risk: 🟢 Safe
-  Downtime: None — profile change applies to future scaling decisions only.
-  Blast Radius: None immediately. Future pod scheduling may differ.
-  Rollback: ✅ Revert autoscaler profile settings.
-  Execution: az aks update --cluster-autoscaler-profile ...
-
-  **"Use Azure Kubernetes Service Cost Analysis"**
-  Category: Cost | Advisor Impact: Medium
-  Risk: 🟢 Safe
-  Downtime: None — purely a monitoring/reporting feature.
-  Blast Radius: None.
-  Rollback: ✅ Disable cost analysis.
-  Execution: Enable via Azure portal or az aks update.
-
-  **"Enable Vertical Pod Autoscaler recommendation mode"**
-  Category: Cost | Advisor Impact: Medium
-  Risk: 🟢 Safe (in recommendation mode — does NOT auto-resize)
-  Downtime: None — recommendation mode only observes and suggests.
-  Blast Radius: None.
-  Rollback: ✅ Disable VPA addon.
-  Execution: az aks update --enable-vpa ...
-  Note: "Recommendation mode" is read-only — safe even in production.
-
-  **"Use Ephemeral OS disk"**
-  Category: OperationalExcellence | Advisor Impact: Low
-  Risk: 🔴 High (requires node pool recreation)
-  Downtime: Full node pool recreation — all pods on affected nodes restart.
-  Blast Radius: High — all pods on the node pool drain and reschedule.
-  Rollback: ❌ Cannot convert back without recreating node pool again.
-  Pre-checks:
-    □ Verify VM SKU supports ephemeral OS disk
-    □ Verify PodDisruptionBudgets are configured
-    □ Plan for pod rescheduling during drain
-  Execution:
-    1. Create new node pool with ephemeral OS: az aks nodepool add --node-osdisk-type Ephemeral
-    2. Cordon old nodes: kubectl cordon <nodes>
-    3. Drain old nodes: kubectl drain <nodes> --ignore-daemonsets --delete-emptydir-data
-    4. Delete old node pool: az aks nodepool delete
-  Post-checks:
-    □ All pods rescheduled and Running on new nodes
-    □ No data loss from emptyDir volumes (expected — they are ephemeral)
-  ⚠️ This is a major change. Schedule during maintenance window.
-
-  **"Use latest generation VM series (Ddv5)"**
-  Category: OperationalExcellence | Advisor Impact: Low
-  Risk: 🟠 Medium (requires node pool recreation or update)
-  Downtime: Rolling update ~5-10 min per node if using surge upgrade.
-  Blast Radius: All pods on affected nodes drain and reschedule.
-  Rollback: ✅ Create new node pool with previous VM series.
-  Pre-checks:
-    □ Verify new VM series is available in region
-    □ Verify subscription quota for new VM series
-    □ Note: This lab uses Standard_D2s_v3 because v5 is not available
-      in this subscription — this recommendation may not be actionable
-  ⚠️ In this specific lab, Standard_D2s_v5 is NOT available due to subscription
-  restrictions. Flag this as "Not actionable in current subscription."
-
-  ───────────────────────────────────────────────────────────────────
-  ### CONTAINER REGISTRY (ACR)
-  ───────────────────────────────────────────────────────────────────
-
-  **"Ensure Geo-replication is enabled for resilience"**
-  Category: HighAvailability | Advisor Impact: High
-  Risk: 🟢 Safe
-  Downtime: None — geo-replication is additive. Existing images unaffected.
-  Blast Radius: None.
-  Rollback: ✅ Remove geo-replication region.
-  Execution: az acr replication create --registry <acr> --location <region>
-  Post-checks: □ Verify replication status is "Ready".
-  Note: Requires Premium SKU. If currently Basic, upgrading SKU first (see below).
-  Cost: Premium SKU is ~$1.67/day vs Basic ~$0.17/day.
-
-  **"Use Premium tier for critical production workloads"**
-  Category: HighAvailability | Advisor Impact: High
-  Risk: 🟢 Safe
-  Downtime: None — SKU upgrade is online. No image re-push needed.
-  Blast Radius: None.
-  Rollback: ✅ Downgrade SKU (but loses Premium features like geo-replication).
-  Execution: az acr update --name <acr> --sku Premium
-  Post-checks: □ Verify ACR is accessible, image pulls work.
-  Note: Cost increase from ~$5/month (Basic) to ~$50/month (Premium).
-
-  ───────────────────────────────────────────────────────────────────
-  ### NETWORKING
-  ───────────────────────────────────────────────────────────────────
-
-  **"Use NAT gateway for outbound connectivity"**
-  Category: HighAvailability | Advisor Impact: Medium
-  Risk: 🟠 Medium
-  Downtime: Brief outbound connectivity disruption (~1-5 min) during cutover.
-  Blast Radius: All pods making outbound connections (image pulls, external APIs).
-  Rollback: ✅ Revert to load balancer outbound rules.
-  Pre-checks:
-    □ Create NAT gateway resource in the subnet
-    □ Verify no dependency on specific outbound IPs (SNAT ports)
-  Execution: az network vnet subnet update --nat-gateway <nat-gw-id> ...
-  Post-checks:
-    □ Verify pods can reach external endpoints (image registries, APIs)
-    □ Verify outbound IP is from NAT gateway
-
-  ───────────────────────────────────────────────────────────────────
-  ### KEY VAULT
-  ───────────────────────────────────────────────────────────────────
-
-  **"Key vaults should have deletion protection enabled (soft delete)"**
-  Category: Security | Advisor Impact: Medium
-  Risk: 🟢 Safe
-  Downtime: None — setting change, no effect on existing secrets.
-  Blast Radius: None.
-  Rollback: ⚠️ Soft delete cannot be disabled once enabled (by design).
-  Execution: az keyvault update --name <kv> --enable-soft-delete true --enable-purge-protection true
-  Post-checks: □ Verify Key Vault properties show soft-delete enabled.
-  Note: This is a one-way change. Purge protection means deleted secrets
-  are retained for 90 days and cannot be permanently deleted.
-
-  **"Diagnostic logs in Key Vault should be enabled"**
-  Category: Security | Advisor Impact: Low
-  Risk: 🟢 Safe
-  Downtime: None — additive monitoring.
-  Blast Radius: None.
-  Rollback: ✅ Remove diagnostic setting.
-  Execution: az monitor diagnostic-settings create --resource <kv-id> ...
-  Post-checks: □ Verify logs appear in Log Analytics workspace.
-
-  ───────────────────────────────────────────────────────────────────
-  ### GENERAL / OTHER RESOURCE TYPES
-  ───────────────────────────────────────────────────────────────────
-
-  **"Diagnostic logs should be enabled" (any resource)**
-  Category: Security | Advisor Impact: Low
-  Risk: 🟢 Safe
-  Downtime: None.
-  Rollback: ✅ Remove diagnostic setting.
-
-  **"Change disk redundancy (LRS→ZRS)"**
-  Risk: 🟠 Medium | Downtime: ~5-15 min | Rollback: ✅ Revert to LRS
-  Requires disk detach/reattach. Pod using PVC goes offline during operation.
-
-  **"Enable Availability Zones"**
-  Risk: 🔴 High | Downtime: Hours (may require cluster recreation)
-  Rollback: ❌ Complex. Plan very carefully.
-
-  **"Upgrade K8s version"**
-  Risk: 🟠 Medium | Downtime: Rolling ~5 min/node | Rollback: ⚠️ Limited
-  Cannot easily downgrade. Test in staging first.
-
-  **"Enable RBAC/AAD integration"**
-  Risk: 🟠 Medium | Downtime: Auth disruption possible | Rollback: ⚠️ Complex
-  Test access with service accounts before and after.
+  For DETAILED per-recommendation analysis with commands and checklists,
+  always consult the uploaded knowledge files (advisor-impact-playbook.md).
 
   ═══════════════════════════════════════════════════════════════════════════════
   HANDLING UNKNOWN RECOMMENDATIONS
   ═══════════════════════════════════════════════════════════════════════════════
 
-  If a recommendation doesn't match any known pattern above:
-  1. Identify the resource type from impactedField
-  2. Research the specific change using az cli docs or Azure documentation
-  3. Apply the generic impact analysis framework:
-     - Does it modify, replace, or delete the resource?
-     - Is the operation online (hot) or offline (cold)?
-     - What services/pods depend on this resource?
-     - Is there a rollback path?
-  4. Default to 🟠 Medium Risk when uncertain — it's safer to overestimate
-  5. Always recommend testing in non-production first
+  If a recommendation doesn't match any pattern above:
+  1. Identify resource type from impactedField
+  2. Determine: modify, replace, or delete operation?
+  3. Check: online (hot) or offline (cold)?
+  4. Map dependencies with kubectl and az cli
+  5. Default to 🟠 Medium Risk when uncertain
 
   ═══════════════════════════════════════════════════════════════════════════════
   RISK CLASSIFICATION
