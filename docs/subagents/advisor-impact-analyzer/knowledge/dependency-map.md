@@ -1,280 +1,172 @@
-# Pet Store Application — Dependency Map
+# Impact Matrix — Recurso Azure × Serviço K8s
 
-This document is a knowledge file for the Advisor Impact Analyzer sub-agent.
-Upload it to the Azure SRE Agent Knowledge Base (Builder → Knowledge Base → Add file)
-so the agent can determine blast radius when analyzing Advisor recommendations.
+Upload para: SRE Agent → Builder → Knowledge Base → Add file
 
----
+## Como usar esta matriz
 
-## Azure Resources → Kubernetes Services → Business Impact
-
-### AKS Cluster: aks-srelab
-
-**Resource Group:** rg-srelab-eastus2
-**Node Pools:**
-- `system` — system node pool (system components, CoreDNS, kube-proxy)
-- `user` — application workloads (all pet store pods use `nodeSelector: nodepool-type: user`)
-
-**If AKS cluster is disrupted:**
-- ALL services offline
-- ALL customer-facing features unavailable
-- Blast radius: 🔴 Critical — complete outage
+Quando o agente analisa uma recomendação do Advisor:
+1. Identifique qual recurso Azure é afetado
+2. Cruze com a tabela abaixo para saber o impacto em cada serviço
+3. Use a coluna "Auto-recupera?" para informar o cliente
 
 ---
 
-### Container Registry: acrsrelabtlwgvg
+## Matriz: Recurso Afetado → Impacto por Serviço
 
-**Used by:** All application deployments (image pull source)
+### AKS Node Pool (scale, drain, recreate)
 
-**Dependency chain:**
-```
-ACR → image pull → ALL pods in namespace "pets"
-```
+| Serviço | Impacto durante drain | Auto-recupera? | Tempo | Cliente afetado? |
+|---------|----------------------|----------------|-------|-----------------|
+| store-front | ❌ Offline até reschedule | ✅ Sim (reschedule) | ~2-5 min | Sim — loja inacessível |
+| order-service | ❌ Offline até reschedule | ✅ Sim | ~2-5 min | Sim — checkout falha |
+| product-service | ❌ Offline até reschedule | ✅ Sim | ~2-5 min | Sim — catálogo vazio |
+| makeline-service | ❌ Offline até reschedule | ✅ Sim | ~2-5 min | Não (backend) |
+| MongoDB | ❌ Offline + PV remount | ✅ Sim (StatefulSet) | ~5-10 min | Indireto — fulfillment para |
+| RabbitMQ | ❌ Offline + possível perda msgs in-flight | ⚠️ Manual (verificar fila) | ~3-5 min | Indireto — pedidos podem perder |
+| store-admin | ❌ Offline até reschedule | ✅ Sim | ~2-5 min | Não (interno) |
+| virtual-customer | ❌ Offline até reschedule | ✅ Sim | ~2-5 min | Não (sintético) |
 
-**If ACR is disrupted:**
-- Existing running pods: ✅ Unaffected (images already pulled)
-- New pod creation / restarts: ❌ ImagePullBackOff
-- Scaling events: ❌ Cannot pull images for new pods
-- Blast radius: 🟡 Low (only affects new pod creation, not running workloads)
-
-**Impact on Advisor recommendations:**
-- SKU upgrade (Basic→Premium): No impact on running pods
-- Geo-replication: No impact on running pods
-- Trusted registries policy: Requires migrating image references
+**Cascata:** Node drain → TODOS os pods evicted → PVs remontados → pods rescheduled.
+MongoDB (StatefulSet) é o mais lento a recuperar por causa do PV remount.
 
 ---
 
-### Virtual Network: vnet-srelab
+### AKS Node Pool (add nodes — operação aditiva)
 
-**Subnets:**
-- `snet-aks` — AKS node subnet
-- `snet-services` — Service subnet
+| Serviço | Impacto | Auto-recupera? | Cliente afetado? |
+|---------|---------|----------------|-----------------|
+| TODOS | ✅ Sem impacto | N/A | Não |
 
-**Dependency chain:**
-```
-VNet → AKS node networking → ALL pod communication
-VNet → NAT gateway / Load Balancer → outbound connectivity
-VNet → NSGs → network policy enforcement
-```
-
-**If VNet/subnet is disrupted:**
-- Pod-to-pod communication: ❌ Broken
-- External access (LoadBalancer): ❌ Broken
-- Blast radius: 🔴 Critical — all network connectivity lost
-
-**Impact on Advisor recommendations:**
-- NAT gateway addition: Brief outbound disruption during cutover (~1-5 min)
-- NSG changes: May break pod connectivity if rules are too restrictive
+Adicionar nodes é sempre seguro. Pods existentes não são movidos.
 
 ---
 
-### Key Vault: kv-srelab-tlwgvg
+### AKS Config (autoscaler, VPA, cost analysis, backup)
 
-**Used by:** AKS for secrets management (CSI driver integration)
+| Serviço | Impacto | Auto-recupera? | Cliente afetado? |
+|---------|---------|----------------|-----------------|
+| TODOS | ✅ Sem impacto | N/A | Não |
 
-**Dependency chain:**
-```
-Key Vault → CSI Secret Store Driver → pods mounting secrets
-```
-
-**If Key Vault is disrupted:**
-- Existing pods with cached secrets: ✅ Continue running
-- Pod restarts / new pods: ❌ Cannot mount secrets
-- Blast radius: 🟡 Low (only affects pod startup, not running workloads)
-
-**Impact on Advisor recommendations:**
-- Soft delete / purge protection: No impact (setting change only)
-- Diagnostic logs: No impact (additive monitoring)
+Mudanças de configuração do cluster não afetam pods rodando.
 
 ---
 
-### Log Analytics Workspace: log-srelab
+### AKS Security (non-root, read-only rootfs, automount)
 
-**Used by:** AKS diagnostics, Container Insights, alerts
+| Serviço | Impacto ao aplicar securityContext | Auto-recupera? | Cliente afetado? |
+|---------|------------------------------------|----------------|-----------------|
+| store-front | ⚠️ Rolling restart ~30s | ✅ Sim | Breve (~30s) se 1 replica |
+| order-service | ⚠️ Rolling restart ~30s | ✅ Sim | Pedidos falham ~30s |
+| product-service | ⚠️ Rolling restart ~30s | ✅ Sim | Catálogo indisponível ~30s |
+| makeline-service | ⚠️ Rolling restart ~30s | ✅ Sim | Não (backend) |
+| MongoDB | ❌ PODE FALHAR — imagem mongo:4.4 requer root | ❌ NÃO | Sim — pipeline de pedidos PARA |
+| RabbitMQ | ⚠️ Restart ~30s (UID 999 compatível com non-root) | ✅ Sim | Não |
+| store-admin | ⚠️ Rolling restart ~30s | ✅ Sim | Não (interno) |
+| virtual-customer | ⚠️ Restart ~30s | ✅ Sim | Não (sintético) |
 
-**Dependency chain:**
+**⚠️ ALERTA CRÍTICO:** MongoDB (mongo:4.4) NÃO funciona com runAsNonRoot sem
+configuração especial (runAsUser: 999, fsGroup: 999, ou imagem Bitnami).
+SEMPRE excluir MongoDB da primeira fase de hardening ou testar antes.
+
+**Cascata se MongoDB falhar (non-root):**
 ```
-Log Analytics → Container Insights → monitoring dashboards
-Log Analytics → Alert rules → incident detection
-Log Analytics → SRE Agent → diagnostic queries (KQL)
-```
-
-**If Log Analytics is disrupted:**
-- Application: ✅ Unaffected (monitoring only)
-- Monitoring/Alerts: ❌ Blind — no alerting or diagnostics
-- SRE Agent: ⚠️ Degraded — cannot run KQL queries
-- Blast radius: 🟡 Low (no app impact, but loses observability)
-
----
-
-### Application Insights: appi-srelab
-
-**Used by:** Application-level telemetry
-
-**If disrupted:**
-- Application: ✅ Unaffected
-- Telemetry: ❌ Lost during disruption
-- Blast radius: 🟡 Low
-
----
-
-### Managed Grafana: grafana-srelab-tlwgvg
-
-**Used by:** Dashboards and visualization
-
-**If disrupted:**
-- Application: ✅ Unaffected
-- Dashboards: ❌ Unavailable
-- Blast radius: 🟡 Low
-
----
-
-### Azure Monitor Workspace (Prometheus): prometheus-srelab
-
-**Used by:** Prometheus metrics collection
-
-**If disrupted:**
-- Application: ✅ Unaffected
-- Metrics: ❌ Gap in metric collection
-- Grafana dashboards: ⚠️ Stale data
-- Blast radius: 🟡 Low
-
----
-
-## Kubernetes Services → Business Functions
-
-### Namespace: pets
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    CUSTOMER-FACING                        │
-│                                                           │
-│  store-front (Vue.js)          store-admin (Vue.js)       │
-│  Port: 8080, LB: 80           Port: 8081, LB: 80         │
-│  2 replicas                    1 replica                  │
-│  External IP: 4.153.127.195   External IP: 128.85.216.177│
-│       │                              │                    │
-│       ├──→ order-service             ├──→ product-service │
-│       └──→ product-service           └──→ makeline-service│
-│                                                           │
-├───────────────────────────────────────────────────────────┤
-│                    PROCESSING LAYER                        │
-│                                                           │
-│  order-service (Node.js)       product-service (Rust)     │
-│  Port: 3000, ClusterIP        Port: 3002, ClusterIP      │
-│  2 replicas                    2 replicas                 │
-│       │                                                   │
-│       └──→ RabbitMQ (queue: "orders")                     │
-│                 │                                         │
-│                 ↓                                         │
-│  makeline-service (Go)                                    │
-│  Port: 3001, ClusterIP                                    │
-│  2 replicas                                               │
-│       │                                                   │
-│       └──→ MongoDB (db: "orderdb", collection: "orders")  │
-│                                                           │
-├───────────────────────────────────────────────────────────┤
-│                    DATA LAYER                              │
-│                                                           │
-│  MongoDB 4.4           RabbitMQ 3.11                      │
-│  Port: 27017           Port: 5672 (AMQP)                  │
-│  1 replica             Port: 15672 (Management)           │
-│  PVC: 8Gi              1 replica                          │
-│  Creds: none           Creds: guest/guest                 │
-│                                                           │
-├───────────────────────────────────────────────────────────┤
-│                    LOAD GENERATION                         │
-│                                                           │
-│  virtual-customer                                         │
-│  1 replica                                                │
-│  Rate: ~100 orders/hour                                   │
-│  Target: order-service                                    │
-└─────────────────────────────────────────────────────────┘
+securityContext.runAsNonRoot aplicado ao MongoDB
+  → Container não inicia (permissão negada)
+  → Pod entra em CrashLoopBackOff
+  → makeline-service perde conexão com DB → health check falha
+  → Pedidos acumulam no RabbitMQ (NÃO são perdidos)
+  → store-admin não exibe dados de pedidos
+  → PEDIDOS CONTINUAM SENDO ACEITOS (order-service → RabbitMQ OK)
+  → MAS NÃO SÃO PROCESSADOS até MongoDB voltar
+  → AÇÃO MANUAL: reverter securityContext do MongoDB
 ```
 
 ---
 
-## Cascading Failure Chains
+### ACR (SKU upgrade, geo-rep)
 
-### Chain 1: MongoDB failure
-```
-MongoDB down
-  → makeline-service health check fails → pod restarts
-  → Orders accumulate in RabbitMQ queue (queue depth grows)
-  → store-admin shows no order data
-  → Customer orders accepted but never fulfilled
-  Impact: Order fulfillment stopped. No data loss if RabbitMQ is healthy.
-  Recovery priority: 1 (restore MongoDB first)
-```
+| Serviço | Impacto | Auto-recupera? | Cliente afetado? |
+|---------|---------|----------------|-----------------|
+| TODOS (rodando) | ✅ Sem impacto | N/A | Não |
+| Novos pods/restarts | ⚠️ Se ACR offline → ImagePullBackOff | ✅ Sim (quando ACR volta) | Só se pod crashar durante |
 
-### Chain 2: RabbitMQ failure
-```
-RabbitMQ down
-  → order-service cannot publish orders → returns errors to store-front
-  → makeline-service loses message source → idle
-  → Customer orders LOST (not queued anywhere)
-  Impact: DATA LOSS RISK. Orders submitted during outage are lost.
-  Recovery priority: 1 (restore RabbitMQ first)
-```
+ACR upgrade e geo-rep são operações online. Pods já rodando NÃO são afetados.
+Risco apenas se um pod crashar durante a operação e tentar pull de imagem.
 
-### Chain 3: order-service failure
-```
-order-service down
-  → store-front checkout broken → customers cannot place orders
-  → virtual-customer generates errors
-  → RabbitMQ and downstream unaffected (no new messages)
-  Impact: Customer-facing. No orders can be placed.
-  Recovery priority: 2
-```
+---
 
-### Chain 4: product-service failure
-```
-product-service down
-  → store-front shows no products → customers cannot browse
-  → store-admin cannot manage products
-  → Order flow technically works but no new orders (no catalog)
-  Impact: Customer-facing. Store appears empty.
-  Recovery priority: 3
-```
+### ACR Private Link / Network Restrictions
 
-### Chain 5: store-front failure
-```
-store-front down
-  → Customers cannot access the store
-  → Backend services unaffected
-  → virtual-customer still generates orders via order-service directly
-  Impact: Customer-facing but no backend cascade.
-  Recovery priority: 4
-```
+| Serviço | Impacto se mal configurado | Auto-recupera? | Cliente afetado? |
+|---------|--------------------------|----------------|-----------------|
+| TODOS (rodando) | ✅ Sem impacto imediato | N/A | Não |
+| Qualquer pod que restartar | ❌ ImagePullBackOff (não consegue pull) | ❌ NÃO até corrigir rede | Sim — se pod afetado for customer-facing |
 
-### Chain 6: store-admin failure
+**Cascata se rede bloquear ACR:**
 ```
-store-admin down
-  → Admins cannot view/manage orders or products
-  → ALL customer-facing functionality unaffected
-  Impact: Internal only. Zero customer impact.
-  Recovery priority: 5
+Private endpoint configurado sem rota correta
+  → Pods rodando: OK (imagem já em cache)
+  → Pod crashar ou escalar: ImagePullBackOff
+  → Se order-service crashar: checkout para
+  → Se MongoDB crashar: fulfillment para
+  → AÇÃO MANUAL: corrigir DNS/rede do private endpoint
 ```
 
 ---
 
-## Impact Matrix for Advisor Recommendation Execution
+### VNet / NAT Gateway
 
-Use this matrix to determine which services need monitoring when executing
-an Advisor recommendation that causes downtime:
+| Serviço | Impacto durante cutover (~1-5 min) | Auto-recupera? | Cliente afetado? |
+|---------|------------------------------------|----------------|-----------------|
+| store-front | ⚠️ Recursos externos falham | ✅ Sim | Sim — assets externos |
+| order-service | ⚠️ Outbound calls falham | ✅ Sim | Sim — pedidos podem falhar |
+| product-service | ⚠️ ai-service inacessível | ✅ Sim | Parcial — sem AI recs |
+| makeline-service | ✅ Sem impacto (interno) | N/A | Não |
+| MongoDB | ✅ Sem impacto (interno) | N/A | Não |
+| RabbitMQ | ✅ Sem impacto (interno) | N/A | Não |
+| store-admin | ⚠️ Recursos externos falham | ✅ Sim | Não (interno) |
+| virtual-customer | ⚠️ Pedidos falham | ✅ Sim | Não (sintético) |
 
-| Resource Changed | Monitor These Services | Pre-Action |
-|------------------|----------------------|-----------|
-| AKS node pool | ALL pods | `kubectl get pods -n pets -w` |
-| AKS cluster config | ALL pods | `kubectl get pods -n pets -w` |
-| ACR | Pod restarts only | `kubectl get events -n pets -w` |
-| VNet / subnet | ALL network connectivity | `kubectl exec -n pets <pod> -- wget -qO- http://order-service:3000/health` |
-| Key Vault | Pod mounts | `kubectl describe pods -n pets \| grep -A5 "Volumes"` |
-| Managed disk | MongoDB (PVC) | `kubectl get pods -n pets -l app=mongodb -w` |
-| Log Analytics | None (monitoring only) | N/A |
-| Grafana | None (dashboards only) | N/A |
+Serviços que fazem APENAS comunicação interna (MongoDB, RabbitMQ, makeline) NÃO são afetados.
 
-**Standard pre-action for any disruptive change:**
-1. Scale virtual-customer to 0: `kubectl scale deploy virtual-customer -n pets --replicas=0`
-2. Wait for RabbitMQ queue to drain: `kubectl exec -n pets deploy/rabbitmq -- rabbitmqctl list_queues`
-3. Take note of current pod status: `kubectl get pods -n pets -o wide`
+---
+
+### Key Vault (settings, private link)
+
+| Mudança | Impacto | Serviços afetados |
+|---------|---------|------------------|
+| Soft delete / purge protection | ✅ Nenhum | Nenhum |
+| Diagnostic logs | ✅ Nenhum | Nenhum |
+| Private link | ⚠️ Se pods usam CSI driver: falha ao montar secrets em restart | Pods com volume mounts do KV |
+
+---
+
+### Log Analytics / App Insights / Grafana / Prometheus
+
+| Mudança | Impacto em serviços | Cliente afetado? |
+|---------|-------------------|-----------------|
+| Qualquer mudança | ✅ NENHUM impacto em serviços | Não |
+
+Estes são recursos de observabilidade. Mudanças neles afetam apenas monitoramento,
+nunca a aplicação em si.
+
+---
+
+## Auto-Recuperação por Serviço
+
+| Serviço | Replicas | readinessProbe | livenessProbe | Auto-recupera após restart? |
+|---------|----------|---------------|---------------|---------------------------|
+| store-front | 2 | ✅ /health | ✅ /health | ✅ Sim — 2 replicas, rolling |
+| order-service | 2 | ✅ /health | ✅ /health | ✅ Sim — 2 replicas, rolling |
+| product-service | 2 | ✅ /health | ✅ /health | ✅ Sim — 2 replicas, rolling |
+| makeline-service | 2 | ✅ /health | ✅ /health | ✅ Sim — 2 replicas, rolling |
+| MongoDB | 1 | ✅ port check | ✅ port check | ⚠️ Lento — PV remount + data load |
+| RabbitMQ | 1 | ✅ diagnostics | ✅ diagnostics | ⚠️ Msgs in-flight podem perder |
+| store-admin | 1 | ✅ /health | ✅ /health | ⚠️ 1 replica — breve indisponibilidade |
+| virtual-customer | 1 | Nenhum | Nenhum | ✅ Sim — stateless |
+
+**Serviços com 1 replica (MongoDB, RabbitMQ, store-admin, virtual-customer):**
+NÃO têm redundância. Qualquer restart = downtime completo daquele serviço até voltar.
+
+**Serviços com 2 replicas (store-front, order-service, product-service, makeline-service):**
+Rolling update possível sem downtime SE usando Deployment strategy RollingUpdate.

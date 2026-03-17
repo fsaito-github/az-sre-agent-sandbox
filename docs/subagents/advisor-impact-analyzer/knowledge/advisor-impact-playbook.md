@@ -1,321 +1,225 @@
-# Advisor Impact Playbook
+# Advisor Impact Playbook — "O Que Quebra"
 
-This document is a knowledge file for the Advisor Impact Analyzer sub-agent.
-Upload it to the Azure SRE Agent Knowledge Base (Builder → Knowledge Base → Add file)
-so the agent can consult it during impact analysis.
+Upload para: SRE Agent → Builder → Knowledge Base → Add file
 
----
-
-## How to Use This Playbook
-
-When analyzing an Azure Advisor recommendation, the agent should:
-1. Match the recommendation to a section in this playbook
-2. Use the pre-analyzed impact data as a starting point
-3. Verify against the actual environment (resource config, dependencies)
-4. Adjust risk rating based on environment-specific factors
+Para CADA tipo de recomendação do Advisor, este playbook responde:
+**"Se eu aplicar essa correção, o que quebra no meu ambiente?"**
 
 ---
 
-## AKS — Azure Kubernetes Service
+## 🟢 SAFE — Nada quebra
 
-### Scaling Node Pools
+### Diagnostic Logs (AKS, Key Vault, qualquer recurso)
+**O que quebra:** NADA. Apenas adiciona coleta de logs.
+**Todos os serviços:** ✅ Sem impacto.
+**Validação:** Verificar que logs aparecem no Log Analytics após ~5 min.
 
-**Recommendation:** "Have at least 2 nodes in your system node pool"
+### Soft Delete / Purge Protection (Key Vault)
+**O que quebra:** NADA. Apenas protege contra exclusão acidental.
+**Todos os serviços:** ✅ Sem impacto.
+**⚠️ IRREVERSÍVEL:** Purge protection não pode ser desabilitada uma vez ativa.
 
-| Aspect | Analysis |
-|--------|----------|
-| Operation | Add nodes to existing pool (scale up) |
-| Downtime | None — new nodes join without disrupting existing pods |
-| Data Risk | None |
-| Cost Impact | +$2-5/day per additional Standard_D2s_v3 node |
-| Rollback | Scale down (but check PodDisruptionBudgets first) |
-| Dependencies | None — additive operation |
-
-**Execution:**
-```bash
-# Check current state
-az aks nodepool show -g <rg> --cluster-name <aks> -n <pool> --query nodeCount
-
-# Scale up
-az aks nodepool scale -g <rg> --cluster-name <aks> -n <pool> --node-count 2
-
-# Verify
-kubectl get nodes
-```
-
-**When NOT safe:** If subnet has insufficient IP addresses, the operation will fail
-(not break anything, but fail). Check available IPs first.
-
----
-
-### Container Security — Running as Root
-
-**Recommendation:** "Running containers as root user should be avoided"
-
-| Aspect | Analysis |
-|--------|----------|
-| Operation | Modify deployment securityContext |
-| Downtime | Pod restart (~30s per pod, rolling update) |
-| Data Risk | None (stateless containers) |
-| Cost Impact | None |
-| Rollback | Remove securityContext from deployment |
-
-**Known issues in this lab (Pet Store):**
-- **MongoDB 4.4**: Official image runs as root by default. To run as non-root:
-  - Use `runAsUser: 999` (mongodb user) in securityContext
-  - May need to adjust volume permissions with `fsGroup: 999`
-  - Alternative: use Bitnami MongoDB image (designed for non-root)
-- **RabbitMQ 3.11**: Official image runs as `rabbitmq` user (UID 999).
-  - Generally compatible with `runAsNonRoot: true`
-  - Set `runAsUser: 999`
-- **Application containers** (store-front, order-service, etc.):
-  - Typically work fine with `runAsNonRoot: true`
-  - May fail if they write to paths outside mounted volumes
-
-**Recommended approach:**
-1. Test each container individually in a dev namespace
-2. Apply one deployment at a time, verify health
-3. Start with application containers (lower risk)
-4. Tackle data stores last (MongoDB, RabbitMQ)
-
----
-
-### Container Security — Trusted Registries
-
-**Recommendation:** "Container images should be deployed from trusted registries only"
-
-| Aspect | Analysis |
-|--------|----------|
-| Operation | Import images to ACR, update deployment manifests |
-| Downtime | Rolling update ~1 min per service |
-| Data Risk | None |
-| Cost Impact | Minor ACR storage increase |
-| Rollback | Revert image references in manifests |
-
-**Current state in this lab:**
-- All images from `ghcr.io/azure-samples/aks-store-demo/`
-- MongoDB from Docker Hub: `mongo:4.4`
-- RabbitMQ from Docker Hub: `rabbitmq:3.11-management-alpine`
-
-**Migration steps:**
-```bash
-# Import to ACR (one-time operation)
-az acr import --name <acr> --source ghcr.io/azure-samples/aks-store-demo/store-front:latest --image store-front:latest
-az acr import --name <acr> --source ghcr.io/azure-samples/aks-store-demo/order-service:latest --image order-service:latest
-# ... repeat for all images
-
-# Update k8s/base/application.yaml with ACR paths
-# image: <acr>.azurecr.io/store-front:latest
-```
-
----
-
-### Container Security — Immutable Root Filesystem
-
-**Recommendation:** "Immutable (read-only) root filesystem should be enforced"
-
-| Aspect | Analysis |
-|--------|----------|
-| Operation | Add `readOnlyRootFilesystem: true` + emptyDir volumes |
-| Downtime | Pod restart (~30s per pod) |
-| Data Risk | None |
-| Rollback | Remove readOnlyRootFilesystem setting |
-
-**Common writable paths needed:**
-| Container | Writable Paths | Solution |
-|-----------|---------------|----------|
-| Node.js apps | /tmp, /home/node | emptyDir volume mounts |
-| Go apps | /tmp | emptyDir volume mount |
-| Vue.js (nginx) | /tmp, /var/cache/nginx, /var/run | emptyDir volume mounts |
-| MongoDB | /data/db (already on PVC), /tmp | Already on PVC + emptyDir for /tmp |
-| RabbitMQ | /var/lib/rabbitmq, /tmp | emptyDir volume mounts |
-
----
+### AKS Cost Analysis / VPA Recommendation / Autoscaler Tuning
+**O que quebra:** NADA. Apenas monitoramento e otimização.
+**Todos os serviços:** ✅ Sem impacto.
 
 ### AKS Backup
+**O que quebra:** NADA. Apenas adiciona proteção de dados.
+**Todos os serviços:** ✅ Sem impacto.
 
-**Recommendation:** "Use AKS Backup for clusters with persistent volumes"
+### ACR Premium Upgrade
+**O que quebra:** NADA. Upgrade de SKU é online.
+**Todos os serviços:** ✅ Sem impacto.
+**Custo:** +~$45/mês.
 
-| Aspect | Analysis |
-|--------|----------|
-| Operation | Install Backup Extension + configure Backup Vault |
-| Downtime | None — purely additive |
-| Data Risk | None — backup doesn't modify workloads |
-| Cost Impact | ~$0.15/instance/month + storage costs |
-| Rollback | Remove backup extension |
-
-This is a **quick win** — zero risk, immediate compliance improvement.
-
----
-
-### Cost — Spot Nodes
-
-**Recommendation:** "Consider Spot nodes for interruptible workloads"
-
-| Aspect | Analysis |
-|--------|----------|
-| Operation | Add Spot node pool alongside existing pool |
-| Downtime | None for existing workloads |
-| Data Risk | Spot nodes can be evicted anytime — only for fault-tolerant workloads |
-| Cost Impact | Up to 90% savings on Spot node compute |
-| Rollback | Delete Spot pool; workloads fall back to regular pool |
-
-**Good candidates in this lab:**
-- `virtual-customer` — synthetic load generator, OK to be interrupted
-- `store-admin` — internal dashboard, brief interruption acceptable
-
-**Bad candidates:**
-- `MongoDB` — data store, must not be evicted
-- `order-service` — customer-facing, must be available
+### ACR Geo-Replicação
+**O que quebra:** NADA. Replicação é aditiva.
+**Todos os serviços:** ✅ Sem impacto.
+**Requisito:** Premium SKU (aplicar upgrade primeiro).
 
 ---
 
-### Cost — Cluster Autoscaler Tuning
+## 🟡 LOW RISK — Restarts breves, atenção especial com data stores
 
-**Recommendation:** "Fine-tune the cluster autoscaler profile for rapid scale down"
+### Non-Root Containers ("Running containers as root should be avoided")
 
-Zero-risk change. Only affects future scaling decisions.
+**O que quebra POR SERVIÇO:**
 
-```bash
-az aks update -g <rg> -n <aks> \
-  --cluster-autoscaler-profile \
-    scale-down-delay-after-add=5m \
-    scale-down-unneeded-time=5m \
-    scan-interval=10s
+| Serviço | Quebra? | Por quê? | Auto-recupera? |
+|---------|---------|----------|----------------|
+| store-front | Não — restart 30s | App containers funcionam non-root | ✅ Sim |
+| order-service | Não — restart 30s | Node.js funciona non-root | ✅ Sim |
+| product-service | Não — restart 30s | Rust funciona non-root | ✅ Sim |
+| makeline-service | Não — restart 30s | Go funciona non-root | ✅ Sim |
+| **MongoDB** | **SIM — CrashLoop** | **mongo:4.4 requer root por padrão** | **❌ NÃO** |
+| RabbitMQ | Não — UID 999 OK | rabbitmq user já é non-root | ✅ Sim |
+| store-admin | Não — restart 30s | Vue.js funciona non-root | ✅ Sim |
+| virtual-customer | Não — restart 30s | Stateless, funciona non-root | ✅ Sim |
+
+**Cascata se aplicar no MongoDB:**
+```
+runAsNonRoot no MongoDB → Container falha ao iniciar
+  → CrashLoopBackOff
+  → makeline-service: "connection refused" ao MongoDB
+  → makeline-service health check falha → restart loop
+  → Pedidos acumulam no RabbitMQ (queue depth cresce)
+  → store-admin: "no order data"
+  → Pedidos novos CONTINUAM sendo aceitos (order→RabbitMQ OK)
+  → Mas NÃO são processados (makeline down)
+  → AÇÃO MANUAL: kubectl rollout undo deploy/mongodb -n pets
+```
+
+**RECOMENDAÇÃO:** Aplicar non-root em: store-front, order-service, product-service,
+makeline-service, store-admin, virtual-customer. **EXCLUIR MongoDB e RabbitMQ.**
+
+**Validação pós-execução:**
+```
+□ kubectl get pods -n pets — todos Running
+□ curl http://<store-front-ip>/ — página carrega
+□ kubectl exec -n pets deploy/rabbitmq -- rabbitmqctl list_queues — fila OK
+□ kubectl logs -n pets deploy/mongodb --tail=5 — sem erros
 ```
 
 ---
 
-### Cost — VPA Recommendation Mode
+### Read-Only Root Filesystem ("Immutable root filesystem should be enforced")
 
-**Recommendation:** "Enable Vertical Pod Autoscaler recommendation mode"
+**O que quebra POR SERVIÇO:**
 
-Zero-risk change. Recommendation mode is **read-only** — only observes and suggests,
-never auto-resizes containers.
+| Serviço | Quebra sem emptyDir? | Paths que precisam de escrita |
+|---------|---------------------|------------------------------|
+| store-front (nginx) | SIM | /tmp, /var/cache/nginx, /var/run |
+| order-service (Node.js) | SIM | /tmp, /home/node |
+| product-service (Rust) | Talvez | /tmp |
+| makeline-service (Go) | Talvez | /tmp |
+| MongoDB | NÃO (PVC já montado) | /data/db (PVC), /tmp (emptyDir) |
+| RabbitMQ | SIM | /var/lib/rabbitmq, /tmp |
+| store-admin (nginx) | SIM | /tmp, /var/cache/nginx |
+| virtual-customer | Talvez | /tmp |
 
-```bash
-az aks update -g <rg> -n <aks> --enable-vpa
-```
-
----
-
-### OperationalExcellence — Ephemeral OS Disk
-
-**Recommendation:** "Use Ephemeral OS disk"
-
-**HIGH RISK** — requires node pool recreation.
-
-| Aspect | Analysis |
-|--------|----------|
-| Operation | Create new node pool + drain old + delete old |
-| Downtime | Full pod reschedule: 10-20 min |
-| Data Risk | emptyDir data lost during drain (expected) |
-| Cost Impact | Slight reduction (no managed OS disk cost) |
-| Rollback | Create new pool without ephemeral, drain back |
-
-**Benefits:** Faster node boot, lower latency I/O, reduced cost.
-**Risk:** Major disruption. Only do during planned maintenance.
+**REGRA:** Para CADA serviço, adicionar emptyDir para TODOS os paths de escrita
+ANTES de habilitar readOnlyRootFilesystem. Se esquecer um path, o container CRASHA.
 
 ---
 
-### OperationalExcellence — Latest VM Series
+### Trusted Registries ("Container images from trusted registries only")
 
-**Recommendation:** "Use latest generation VM series such as Ddv5"
+**O que quebra:** NADA se feito corretamente (import → update manifests → rolling update).
+**Risco:** Se esquecer de importar uma imagem para o ACR, o pod faz ImagePullBackOff.
 
-⚠️ **In this lab:** Standard_D2s_v5 is NOT available due to subscription
-restrictions. This recommendation is **not actionable** in the current environment.
-Flag as "Acknowledged — not actionable in current subscription" and suppress.
-
----
-
-## Container Registry (ACR)
-
-### Geo-Replication
-
-**Recommendation:** "Ensure Geo-replication is enabled for resilience"
-
-| Aspect | Analysis |
-|--------|----------|
-| Operation | Add replication to second region |
-| Downtime | None — purely additive |
-| Prerequisite | Requires Premium SKU |
-| Cost Impact | Premium: ~$50/month + replication storage |
-| Rollback | Remove replication region |
-
-**Dependency:** Must upgrade to Premium SKU first (see below).
-
-### Premium SKU
-
-**Recommendation:** "Use Premium tier for critical production workloads"
-
-| Aspect | Analysis |
-|--------|----------|
-| Operation | In-place SKU upgrade |
-| Downtime | None — online operation |
-| Cost Impact | Basic (~$5/month) → Premium (~$50/month) = +$45/month |
-| Rollback | Downgrade SKU (loses Premium features) |
+| Serviço | Imagem atual | Precisa importar? |
+|---------|-------------|-------------------|
+| store-front | ghcr.io/azure-samples/...store-front:latest | Sim → ACR |
+| order-service | ghcr.io/azure-samples/...order-service:latest | Sim → ACR |
+| product-service | ghcr.io/azure-samples/...product-service:latest | Sim → ACR |
+| makeline-service | ghcr.io/azure-samples/...makeline-service:latest | Sim → ACR |
+| MongoDB | mongo:4.4 (Docker Hub) | Sim → ACR |
+| RabbitMQ | rabbitmq:3.11-management-alpine (Docker Hub) | Sim → ACR |
+| store-admin | ghcr.io/azure-samples/...store-admin:latest | Sim → ACR |
+| virtual-customer | ghcr.io/azure-samples/...virtual-customer:latest | Sim → ACR |
 
 ---
 
-## Networking
+### Disable API Credential Automount
+
+**O que quebra:** Se algum pod PRECISA acessar a API do Kubernetes, ele para de funcionar.
+
+| Serviço | Precisa de K8s API? | Seguro desabilitar? |
+|---------|-------------------|-------------------|
+| Todos os app containers | Não (comunicação via HTTP entre serviços) | ✅ Sim |
+| Pods com CSI driver (KV) | Pode precisar | ⚠️ Verificar antes |
+
+---
+
+## 🟠 MEDIUM RISK — Requer janela de manutenção
 
 ### NAT Gateway
 
-**Recommendation:** "Use NAT gateway for outbound connectivity"
+**O que quebra DURANTE o cutover (~1-5 min):**
 
-| Aspect | Analysis |
-|--------|----------|
-| Operation | Create NAT GW + associate with AKS subnet |
-| Downtime | Brief outbound connectivity disruption (1-5 min) |
-| Data Risk | None |
-| Cost Impact | ~$32/month (NAT GW) + data processing |
-| Rollback | Disassociate NAT GW from subnet |
+| Serviço | Quebra? | Por quê? | Auto-recupera? |
+|---------|---------|----------|----------------|
+| store-front | ⚠️ Parcial | Assets externos falham | ✅ Sim |
+| order-service | ⚠️ Sim | Outbound calls falham | ✅ Sim |
+| product-service | ⚠️ Parcial | ai-service inacessível | ✅ Sim |
+| makeline-service | Não | Comunicação interna apenas | N/A |
+| MongoDB | Não | Comunicação interna apenas | N/A |
+| RabbitMQ | Não | Comunicação interna apenas | N/A |
 
-**Why it matters:** Without NAT GW, AKS uses load balancer SNAT ports which
-can be exhausted under high outbound connection load.
-
----
-
-## Key Vault
-
-### Soft Delete + Purge Protection
-
-**Recommendation:** "Key vaults should have deletion protection enabled"
-
-| Aspect | Analysis |
-|--------|----------|
-| Operation | Enable soft-delete and purge protection |
-| Downtime | None |
-| Data Risk | None — protective measure |
-| Rollback | ⚠️ **Cannot be disabled** once enabled |
-| Cost Impact | None |
-
-**IMPORTANT:** This is a one-way change. Once enabled:
-- Deleted secrets are retained for 90 days
-- Cannot be permanently deleted during retention period
-- This is by design for security compliance
-
-### Diagnostic Logs
-
-**Recommendation:** "Diagnostic logs in Key Vault should be enabled"
-
-Zero-risk change. Enables audit logging of Key Vault operations.
-
-```bash
-az monitor diagnostic-settings create \
-  --name kv-diagnostics \
-  --resource <kv-resource-id> \
-  --workspace <log-analytics-id> \
-  --logs '[{"category":"AuditEvent","enabled":true}]'
+**Validação pós-execução:**
+```
+□ kubectl exec -n pets deploy/order-service -- wget -qO- https://mcr.microsoft.com
+□ Verificar novo outbound IP: az network nat gateway show
+□ kubectl get pods -n pets — todos Running
 ```
 
 ---
 
-## Quick Reference — Risk by Recommendation
+### Private Link (ACR e Key Vault)
 
-| Risk | Recommendations | Count |
-|------|----------------|-------|
-| 🟢 Safe | AKS Backup, Cost Analysis, VPA recommendation mode, Autoscaler tuning, ACR Premium, ACR Geo-rep, Diagnostic logs (KV), Diagnostic logs (K8s), Soft delete KV | 9 |
-| 🟡 Low | Running as root, Read-only rootfs, Spot nodes, Trusted registries | 4 |
-| 🟠 Medium | 2+ system nodes, NAT gateway, Latest VM series | 3 |
-| 🔴 High | Ephemeral OS disk | 1 |
+**O que quebra SE MAL CONFIGURADO:**
+
+```
+Private endpoint ativado sem DNS correto
+  → Pods rodando: ✅ OK (cache)
+  → Pod que crashar/escalar: ❌ ImagePullBackOff (ACR) ou ❌ SecretMountFail (KV)
+  → Se order-service crashar nesse momento: checkout PARA
+  → AÇÃO MANUAL: corrigir DNS privado ou reverter private endpoint
+```
+
+**⚠️ RISCO PRINCIPAL:** A mudança não afeta pods rodando, mas SE um pod crashar
+DURANTE a operação, ele não consegue restart até a rede estar correta.
+
+---
+
+### Restrict API Server Access
+
+**O que quebra SE CONFIGURADO ERRADO:**
+```
+API server restrito a IPs específicos
+  → kubectl local: ❌ Access denied (se seu IP não está na allowlist)
+  → CI/CD pipelines: ❌ Deploy falha (se IP do runner não está na allowlist)
+  → SRE Agent: ❌ Pode perder acesso (verificar IP do managed identity)
+  → Pods rodando: ✅ OK (não acessam API server diretamente)
+```
+
+**⚠️ RISCO:** Se configurar errado, você PERDE acesso ao cluster.
+Rollback é complexo porque precisa de acesso ao API server para reverter.
+
+---
+
+## 🔴 HIGH RISK — Aprovar formalmente + testar em non-prod
+
+### Ephemeral OS Disk
+
+**O que quebra:**
+
+| Serviço | Impacto | Tempo offline | Auto-recupera? |
+|---------|---------|-------------|----------------|
+| TODOS | ❌ Pod evicted durante drain | ~15-20 min | ✅ Sim (reschedule) |
+| MongoDB | ❌ PV remount lento | ~5-10 min extra | ✅ Sim (StatefulSet) |
+| RabbitMQ | ❌ Msgs in-flight podem perder | ~3-5 min | ⚠️ Verificar fila |
+
+**Cascata completa:**
+```
+Node pool recreation → kubectl drain todos os nodes
+  → TODOS os pods evicted
+  → PVs detached do node antigo
+  → Novo node pool criado com Ephemeral OS
+  → PVs re-attached aos novos nodes
+  → Pods rescheduled
+  → MongoDB: PV remount + data check (~5-10 min)
+  → RabbitMQ: restart + verificar se msgs sobreviveram
+  → App containers: restart normal (~30s cada)
+  → DURANTE TUDO ISSO: loja completamente offline
+```
+
+**PRÉ-REQUISITOS OBRIGATÓRIOS:**
+```
+□ Snapshot de TODOS os PVs (MongoDB!)
+□ kubectl scale deploy virtual-customer -n pets --replicas=0
+□ Esperar RabbitMQ queue drenar: rabbitmqctl list_queues
+□ Verificar que VM size suporta ephemeral disk
+□ Testar em ambiente non-prod primeiro
+□ Comunicar stakeholders: "loja offline por ~20 min"
+```
