@@ -10,6 +10,8 @@ handoff_description: >
   action items. Outputs publication-ready markdown.
 
 tools:
+  # Select in Subagent Builder UI: Log Analytics/Kusto,
+  # AKS/Kubernetes (kubectl), and Python code execution tools.
   - execute_kusto_query
   - ExecuteKubectlCommand
   - ExecutePythonCode

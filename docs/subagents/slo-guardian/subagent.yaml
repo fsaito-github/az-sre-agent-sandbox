@@ -21,6 +21,8 @@ handoff_description: >
   budget check, or deployment-readiness assessment.
 
 tools:
+  # Select in Subagent Builder UI: Azure CLI, Log Analytics/Kusto,
+  # AKS/Kubernetes (kubectl), and Python code execution tools.
   - azure_cli
   - execute_kusto_query
   - ExecuteKubectlCommand

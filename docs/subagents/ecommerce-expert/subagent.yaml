@@ -3,6 +3,8 @@ agent_type: Review
 enable_skills: true
 
 tools:
+  # Select in Subagent Builder UI: Azure CLI, Log Analytics/Kusto,
+  # AKS/Kubernetes (kubectl), and Python code execution tools.
   - azure_cli
   - execute_kusto_query
   - ExecuteKubectlCommand
