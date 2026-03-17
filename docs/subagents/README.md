@@ -12,6 +12,7 @@ The Azure SRE Agent already excels at incident diagnosis, automated remediation,
 | [🛒 E-Commerce Domain Expert](ecommerce-expert/) | Business-aware diagnosis — translates infra failures to order/revenue impact | Knows K8s but not app business logic |
 | [📋 PIR Generator](pir-generator/) | Structured Post-Incident Review documents (timeline, RCA, action items) | Diagnoses incidents but doesn't generate formal post-mortems |
 | [🔐 Security Posture Auditor](security-auditor/) | Proactive K8s security audit (CIS benchmark, secrets, RBAC, network policies) | Diagnoses incidents, doesn't audit compliance |
+| [🔍 Advisor Impact Analyzer](advisor-impact-analyzer/) | Analyzes operational impact of Advisor recommendations with execution plans and rollback | Doesn't bridge Advisor recommendations to safe execution |
 
 ## Quick Start
 
@@ -29,23 +30,29 @@ The Azure SRE Agent already excels at incident diagnosis, automated remediation,
 | **SRE/DevOps Teams** | SLO Guardian + PIR Generator | ~20 min |
 | **Engineering Leadership** | E-Commerce Expert + SLO Guardian | ~15 min |
 | **Security/Compliance** | Security Auditor + PIR Generator | ~15 min |
-| **Full Demo** | All 4 (in order below) | ~40 min |
+| **Operations/Change Mgmt** | Advisor Impact Analyzer + SLO Guardian | ~20 min |
+| **Full Demo** | All 5 (in order below) | ~50 min |
 
 ### Suggested Full Demo Order
 
-1. **Security Auditor** — Start with a clean audit (sets the stage)
-2. **SLO Guardian** — Show healthy SLO baseline
-3. Break a scenario (e.g., `kubectl apply -f k8s/scenarios/oom-killed.yaml`)
-4. **E-Commerce Expert** — Analyze business impact
-5. Fix with SRE Agent (native capability)
-6. **PIR Generator** — Generate post-mortem
-7. **SLO Guardian** — Show error budget impact and deploy readiness
+1. **Advisor Impact Analyzer** — Show pending Advisor recommendations and safe execution plans
+2. **Security Auditor** — Start with a clean audit (sets the stage)
+3. **SLO Guardian** — Show healthy SLO baseline
+4. Break a scenario (e.g., `kubectl apply -f k8s/scenarios/oom-killed.yaml`)
+5. **E-Commerce Expert** — Analyze business impact
+6. Fix with SRE Agent (native capability)
+7. **PIR Generator** — Generate post-mortem
+8. **SLO Guardian** — Show error budget impact and deploy readiness
 
 ## File Structure
 
 ```
 docs/subagents/
 ├── README.md                    # This file
+├── advisor-impact-analyzer/
+│   ├── subagent.yaml           # Paste into Subagent Builder
+│   ├── README.md               # Documentation & test prompts
+│   └── demo-flow.md            # Step-by-step demo script
 ├── slo-guardian/
 │   ├── subagent.yaml           # Paste into Subagent Builder
 │   ├── README.md               # Documentation & test prompts
