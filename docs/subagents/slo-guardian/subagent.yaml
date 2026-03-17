@@ -22,10 +22,10 @@ handoff_description: >
 
 tools:
   # Select in Subagent Builder UI: Azure CLI, Log Analytics/Kusto,
-  # AKS/Kubernetes (kubectl), and Python code execution tools.
+  # and Python code execution tools.
+  # Note: kubectl is available natively when AKS is connected as a resource.
   - azure_cli
   - execute_kusto_query
-  - ExecuteKubectlCommand
   - ExecutePythonCode
 
 enable_skills: true

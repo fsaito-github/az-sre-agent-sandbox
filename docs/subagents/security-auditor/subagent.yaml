@@ -6,10 +6,10 @@ enable_skills: true
 
 tools:
   # Select in Subagent Builder UI: Azure CLI, Log Analytics/Kusto,
-  # AKS/Kubernetes (kubectl), and Python code execution tools.
+  # and Python code execution tools.
+  # Note: kubectl is available natively when AKS is connected as a resource.
   - azure_cli
   - execute_kusto_query
-  - ExecuteKubectlCommand
   - ExecutePythonCode
 
 handoff_description: >
@@ -298,7 +298,7 @@ system_prompt: |
      Honor the scope but mention which categories were skipped.
 
   9. **Use the right tools:**
-     - `ExecuteKubectlCommand` for all kubectl operations
+     - `azure_cli` for Azure-level checks and kubectl (available natively via AKS connection)
      - `ExecutePythonCode` for parsing JSON output and complex analysis
      - `azure_cli` for AKS-level checks (managed identity, RBAC mode, etc.)
      - `execute_kusto_query` for querying Azure Monitor / Log Analytics

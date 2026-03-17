@@ -8,13 +8,11 @@ enable_skills: true
 # The names below are logical references. In the portal, look for:
 #   - Azure CLI tool (for az commands)
 #   - Log Analytics / Kusto query tool (for KQL queries)
-#   - AKS / Kubernetes tool (for kubectl commands)
 #   - Python code execution tool (for calculations)
-# Select all tools that match these capabilities.
+# Note: kubectl is available natively when AKS is connected as a resource.
 tools:
   - azure_cli
   - execute_kusto_query
-  - ExecuteKubectlCommand
   - ExecutePythonCode
 
 handoff_description: >
