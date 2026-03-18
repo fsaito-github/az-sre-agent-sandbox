@@ -45,24 +45,36 @@ O SRE Agent sabe que o Advisor recomenda algo, mas não analisa se é **seguro e
 4. Cole o conteúdo de [`subagent.yaml`](subagent.yaml)
 5. Salve e teste no **Playground**
 
-### 2. Upload dos Knowledge Files (Recomendado)
+### 2. Upload do Knowledge File
 
-Os knowledge files enriquecem o sub-agent com análise detalhada de impacto
-e mapa de dependências do ambiente. O sub-agent funciona sem eles, mas com
-eles as respostas são mais precisas e completas.
+O knowledge file ensina o agente a **investigar** impacto dinamicamente,
+não dá respostas prontas. Funciona em QUALQUER ambiente.
 
 1. No SRE Agent portal, vá em **Builder** → **Knowledge Base**
-2. Clique **Add file** e faça upload dos seguintes arquivos da pasta `knowledge/`:
+2. Clique **Add file** e faça upload:
 
-| Arquivo | O que contém | Tamanho |
-|---------|-------------|---------|
-| [`advisor-impact-playbook.md`](knowledge/advisor-impact-playbook.md) | Análise detalhada de impacto por tipo de recomendação do Advisor (AKS, ACR, Network, KV) | ~10 KB |
-| [`dependency-map.md`](knowledge/dependency-map.md) | Mapa completo de dependências: recurso Azure → serviço K8s → impacto de negócio | ~10 KB |
-| [`SKILL.md`](knowledge/SKILL.md) | Procedimento step-by-step que o agente segue para análise de impacto | ~6 KB |
+| Arquivo | O que contém |
+|---------|-------------|
+| [`impact-investigation-framework.md`](knowledge/impact-investigation-framework.md) | Framework de investigação: como descobrir dependências, avaliar risco por tipo de recomendação, e construir tabelas de impacto usando dados reais do ambiente |
 
 3. Aguarde a indexação (geralmente < 1 minuto)
-4. Teste: pergunte ao agente "Quais são as recomendações do Advisor?" — ele
-   deve referenciar os knowledge files na resposta
+
+### Filosofia: Investigação, não Lookup
+
+O knowledge file **NÃO** contém respostas prontas como "MongoDB quebra com non-root".
+Ele ensina o agente a **descobrir** se um container vai quebrar:
+
+```
+Antes (lookup estático):     Agora (investigação dinâmica):
+"MongoDB: ❌ CrashLoop"       kubectl get pods → descobre imagens reais
+                              → verifica se já tem securityContext
+                              → identifica se é imagem oficial (requer root)
+                              → CONCLUI se vai quebrar naquele ambiente
+```
+
+Isso significa que o agente funciona em qualquer ambiente — pet store,
+e-commerce real, microserviços bancários — sem precisar reescrever os
+knowledge files.
 
 ### Como Funciona a Integração
 
@@ -78,12 +90,14 @@ SRE Agent (principal)
 Advisor Impact Analyzer (sub-agent)
     │
     ├── 1. Coleta recomendações via `az advisor recommendation list`
-    ├── 2. Consulta Knowledge Base (busca semântica):
-    │       ├── advisor-impact-playbook.md → dados de impacto pré-analisados
-    │       └── dependency-map.md → blast radius por recurso
-    ├── 3. Consulta SKILL.md → segue procedimento step-by-step
-    ├── 4. Usa tools (az cli, kubectl) → verifica estado real
-    ├── 5. Classifica risco e gera relatório
+    ├── 2. DESCOBRE estado real do ambiente:
+    │       ├── kubectl get pods → replicas, imagens, securityContext
+    │       ├── kubectl get svc → exposição (LB vs ClusterIP)
+    │       └── env vars dos pods → dependências entre serviços
+    ├── 3. Consulta Knowledge Base (impact-investigation-framework.md)
+    │       → Framework ensina COMO investigar, não dá respostas prontas
+    ├── 4. RACIOCINA sobre impacto usando dados reais
+    ├── 5. Gera tabela de impacto POR SERVIÇO com dados descobertos
     │
     ↓
 Retorna análise ao chat
