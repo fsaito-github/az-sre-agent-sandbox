@@ -1,175 +1,195 @@
 # 🔍 Advisor Impact Analyzer
 
-## O Problema
+## The Problem
 
-O Azure Advisor gera recomendações valiosas (confiabilidade, custo, segurança, performance), mas a maioria fica **meses sem ser executada** porque as equipes não conseguem responder:
+Azure Advisor generates valuable recommendations (reliability, cost, security,
+performance), but most remain **unacted for months** because teams cannot answer:
 
-- Vai causar downtime? Quanto tempo?
-- Quais serviços serão afetados?
-- Tem como reverter se der errado?
-- Preciso de janela de manutenção?
-- É seguro fazer agora?
+- Will it cause downtime? How long?
+- Which workloads will be affected?
+- Can I roll back if something goes wrong?
+- Do I need a maintenance window?
+- Is it safe to do it now?
 
-## A Solução
+These questions apply regardless of what runs in the environment — whether it's
+a microservices application on AKS, a set of App Services, VMs, or a hybrid
+topology.
 
-O **Advisor Impact Analyzer** transforma uma recomendação vaga do Advisor em um **plano de execução completo com análise de risco**, incluindo:
+## The Solution
 
-- Mapeamento de recursos e dependências afetadas
-- Estimativa de downtime
-- Blast radius (serviços e usuários impactados)
-- Classificação de risco (🟢 Safe → 🔴 High Risk)
-- Plano step-by-step com pre-checks, execução, post-checks e rollback
-- Recomendação de timing (janela de manutenção ou execução imediata)
+The **Advisor Impact Analyzer** transforms a vague Advisor recommendation into
+a **complete execution plan with risk analysis**, including:
 
-## Por que não é redundante com o SRE Agent nativo?
+- Dynamic discovery of workloads and their dependencies
+- Downtime estimation based on real environment state
+- Blast radius mapping (affected workloads and end users)
+- Risk classification (🟢 Safe → 🔴 High Risk)
+- Step-by-step plan with pre-checks, execution, post-checks, and rollback
+- Timing recommendation (maintenance window or immediate execution)
 
-| Capacidade | SRE Agent Nativo | Advisor Impact Analyzer |
+## Key Design Principle: Discover, Don't Assume
+
+The agent does NOT contain a static map of services. It **discovers** what
+exists in the environment at analysis time:
+
+```
+Static approach (fragile):          Dynamic approach (this agent):
+"MongoDB: ❌ CrashLoop"              kubectl get pods → discovers real workloads
+                                     → discovers dependencies from env vars
+                                     → checks security posture per container
+                                     → CONCLUDES what will break in THIS environment
+```
+
+This means the agent works in any environment — e-commerce, banking,
+SaaS platform, IoT backend — without rewriting its configuration.
+
+## Why isn't this redundant with the native SRE Agent?
+
+| Capability | Native SRE Agent | Advisor Impact Analyzer |
 |-----------|-----------------|------------------------|
-| Ler recomendações do Advisor | ✅ Pode consultar | ✅ Consulta e analisa |
-| Diagnóstico de incidentes | ✅ Core feature | ❌ Não é sua função |
-| **Análise de impacto operacional** | ❌ | ✅ Especializado |
-| **Mapeamento de dependências** | Parcial | ✅ Completo (Azure + K8s) |
-| **Plano de execução com rollback** | ❌ | ✅ Estruturado |
-| **Classificação de risco** | ❌ | ✅ 4 níveis |
-| **Batch analysis e priorização** | ❌ | ✅ Com ordem de execução |
+| Read Advisor recommendations | ✅ Can query | ✅ Queries and analyzes |
+| Incident diagnosis | ✅ Core feature | ❌ Not its function |
+| **Operational impact analysis** | ❌ | ✅ Specialized |
+| **Dependency mapping** | Partial | ✅ Dynamic (K8s + Azure) |
+| **Execution plan with rollback** | ❌ | ✅ Structured |
+| **Risk classification** | ❌ | ✅ 4 levels |
+| **Batch analysis and prioritization** | ❌ | ✅ With execution order |
 
-O SRE Agent sabe que o Advisor recomenda algo, mas não analisa se é **seguro executar agora** nem produz um plano operacional.
+The SRE Agent knows that Advisor recommends something, but it doesn't analyze
+whether it's **safe to execute now** nor produce an operational plan.
 
-## Instalação
+## Installation
 
-### 1. Criar o Sub-Agent
+### 1. Create the Sub-Agent
 
-1. Acesse o SRE Agent no [Azure Portal](https://aka.ms/sreagent/portal)
-2. Vá em **Builder** → **Subagent Builder**
-3. Clique **+ Create subagent**
-4. Cole o conteúdo de [`subagent.yaml`](subagent.yaml)
-5. Salve e teste no **Playground**
+1. Open the SRE Agent in the [Azure Portal](https://aka.ms/sreagent/portal)
+2. Go to **Builder** → **Subagent Builder**
+3. Click **+ Create subagent**
+4. Paste the contents of [`subagent.yaml`](subagent.yaml)
+5. Save and test in the **Playground**
 
-### 2. Upload do Knowledge File
+### 2. Upload the Knowledge File
 
-O knowledge file ensina o agente a **investigar** impacto dinamicamente,
-não dá respostas prontas. Funciona em QUALQUER ambiente.
+The knowledge file teaches the agent to **investigate** impact dynamically.
+It works in ANY environment.
 
-1. No SRE Agent portal, vá em **Builder** → **Knowledge Base**
-2. Clique **Add file** e faça upload:
+1. In the SRE Agent portal, go to **Builder** → **Knowledge Base**
+2. Click **Add file** and upload:
 
-| Arquivo | O que contém |
-|---------|-------------|
-| [`impact-investigation-framework.md`](knowledge/impact-investigation-framework.md) | Framework de investigação: como descobrir dependências, avaliar risco por tipo de recomendação, e construir tabelas de impacto usando dados reais do ambiente |
+| File | Contents |
+|------|----------|
+| [`impact-investigation-framework.md`](knowledge/impact-investigation-framework.md) | Investigation framework: how to detect environment profiles, discover dependencies, assess risk by recommendation type, and build impact tables using real data |
 
-3. Aguarde a indexação (geralmente < 1 minuto)
+3. Wait for indexing (usually < 1 minute)
 
-### Filosofia: Investigação, não Lookup
-
-O knowledge file **NÃO** contém respostas prontas como "MongoDB quebra com non-root".
-Ele ensina o agente a **descobrir** se um container vai quebrar:
+### How the Integration Works
 
 ```
-Antes (lookup estático):     Agora (investigação dinâmica):
-"MongoDB: ❌ CrashLoop"       kubectl get pods → descobre imagens reais
-                              → verifica se já tem securityContext
-                              → identifica se é imagem oficial (requer root)
-                              → CONCLUI se vai quebrar naquele ambiente
-```
-
-Isso significa que o agente funciona em qualquer ambiente — pet store,
-e-commerce real, microserviços bancários — sem precisar reescrever os
-knowledge files.
-
-### Como Funciona a Integração
-
-```
-Usuário: "Analise as recomendações do Advisor"
+User: "Analyze the Advisor recommendations"
     │
     ↓
-SRE Agent (principal)
+SRE Agent (main)
     │
-    ├── handoff_description match → invoca Advisor Impact Analyzer
+    ├── handoff_description match → invokes Advisor Impact Analyzer
     │
     ↓
 Advisor Impact Analyzer (sub-agent)
     │
-    ├── 1. Coleta recomendações via `az advisor recommendation list`
-    ├── 2. DESCOBRE estado real do ambiente:
-    │       ├── kubectl get pods → replicas, imagens, securityContext
-    │       ├── kubectl get svc → exposição (LB vs ClusterIP)
-    │       └── env vars dos pods → dependências entre serviços
-    ├── 3. Consulta Knowledge Base (impact-investigation-framework.md)
-    │       → Framework ensina COMO investigar, não dá respostas prontas
-    ├── 4. RACIOCINA sobre impacto usando dados reais
-    ├── 5. Gera tabela de impacto POR SERVIÇO com dados descobertos
+    ├── 1. DETECTS environment profile (K8s, PaaS, hybrid)
+    ├── 2. DISCOVERS real environment state:
+    │       ├── kubectl/az → workloads, replicas, security posture
+    │       ├── services/endpoints → exposure (LB vs ClusterIP vs private)
+    │       └── env vars/connection strings → dependencies
+    ├── 3. CLASSIFIES workloads by role (customer-facing, data store, etc.)
+    ├── 4. Consults Knowledge Base (impact-investigation-framework.md)
+    │       → Framework teaches HOW to investigate, not pre-built answers
+    ├── 5. REASONS about impact using discovered data
+    ├── 6. Generates impact table PER WORKLOAD with real data
     │
     ↓
-Retorna análise ao chat
+Returns analysis to chat
     │
-    ├── Usuário pode pedir deep-dive em uma recomendação
-    ├── Usuário pode pedir para executar (handoff ao SRE Agent principal)
-    └── Usuário pode pedir análise de outro sub-agent:
-        ├── Security Auditor → aprofundar recomendações de segurança
-        ├── SLO Guardian → checar se error budget permite janela de manutenção
-        └── E-Commerce Expert → impacto de negócio durante downtime
+    ├── User can request deep-dive on a specific recommendation
+    ├── User can request execution (handoff to main SRE Agent)
+    └── User can request analysis from another sub-agent:
+        ├── Security Auditor → deeper security recommendation audit
+        ├── SLO Guardian → check if error budget allows the maintenance window
+        └── Domain Expert → business impact quantification
 ```
 
-## Prompts de Teste
+## Supported Environment Profiles
 
-### Visão Geral
+| Profile | Description | Discovery Method |
+|---------|-------------|-----------------|
+| **A — Kubernetes + Azure** | AKS with workloads | kubectl + az cli + KQL |
+| **B — Azure PaaS** | App Service, Functions, VMs, managed DBs | az cli + KQL |
+| **C — Hybrid** | AKS + PaaS resources in same resource group | kubectl + az cli + KQL |
+| **D — Partially observable** | Limited tool access or empty results | Best-effort with confidence notes |
+
+## Test Prompts
+
+### Overview
 ```
-Quais são as recomendações do Azure Advisor para o resource group rg-srelab-eastus2?
-Mostre um resumo com análise de impacto de cada uma.
+What are the Azure Advisor recommendations for my resource group?
+Show a summary with impact analysis for each one.
 ```
 
-### Análise Específica
+### Specific Analysis
 ```
-Analise o impacto de executar a recomendação de [redundância/resize/upgrade]
-do Advisor. Quero saber: downtime, serviços afetados, e plano de rollback.
+Analyze the impact of executing the [redundancy/resize/upgrade]
+recommendation. I need: downtime, affected workloads, and rollback plan.
 ```
 
 ### Quick Wins
 ```
-Quais recomendações do Advisor posso executar agora com segurança,
-sem causar downtime? Liste as "quick wins".
+Which Advisor recommendations can I execute right now safely,
+without causing downtime? List the "quick wins".
 ```
 
-### Plano de Execução Completo
+### Full Execution Plan
 ```
-Crie um plano de execução para todas as recomendações do Advisor,
-ordenado do menor para o maior risco. Inclua estimativa de tempo total.
+Create an execution plan for all Advisor recommendations,
+ordered from lowest to highest risk. Include total time estimate.
 ```
 
 ### Batch Execution
 ```
-Quais recomendações do Advisor podem ser executadas em paralelo
-e quais precisam ser sequenciais? Otimize o tempo total.
+Which Advisor recommendations can be executed in parallel
+and which must be sequential? Optimize total time.
 ```
 
-### Análise de Custo x Risco
+### Cost vs Risk
 ```
-Para as recomendações de custo do Advisor, qual a economia estimada
-versus o risco operacional de cada mudança?
-```
-
-### Pré-Mudança
-```
-Vou executar a recomendação X do Advisor. Me dê o checklist
-completo de pre-checks antes de começar.
+For the cost recommendations, what's the estimated savings
+versus the operational risk of each change?
 ```
 
-### Pós-Mudança
+### Pre-Change Checklist
 ```
-Acabei de executar a recomendação X do Advisor. Quais validações
-devo fazer para confirmar que tudo está funcionando?
+I'm about to execute recommendation X. Give me the complete
+pre-check checklist before starting.
 ```
 
-## Classificação de Risco
+### Post-Change Validation
+```
+I just executed recommendation X. What validations should I run
+to confirm everything is working?
+```
 
-| Nível | Critério | Ação |
-|-------|---------|------|
-| 🟢 **Safe** | Sem downtime, sem risco de dados, reversível | Executar a qualquer momento |
-| 🟡 **Low Risk** | Disrupção breve (<1 min), reversível | Executar em horário de baixo tráfego |
-| 🟠 **Medium Risk** | Downtime 1-15 min, sem perda de dados | Agendar janela de manutenção |
-| 🔴 **High Risk** | Downtime >15 min, risco de dados, difícil reverter | Aprovação + janela + rollback testado |
+## Risk Classification
 
-## Exemplo de Output
+| Level | Criteria | Action |
+|-------|----------|--------|
+| 🟢 **Safe** | No downtime, no data risk, reversible | Execute anytime |
+| 🟡 **Low Risk** | Brief disruption (<1 min), reversible | Execute during low traffic |
+| 🟠 **Medium Risk** | Downtime 1-15 min, no data loss | Schedule maintenance window |
+| 🔴 **High Risk** | Downtime >15 min, data risk, hard to reverse | Approval + window + tested rollback |
+
+## Example Output
+
+The following is an example from an AKS e-commerce lab environment. Your output
+will reflect whatever workloads and dependencies the agent discovers in your
+actual environment.
 
 ```
 ══════════════════════════════════════════════════════════════════
@@ -178,8 +198,8 @@ devo fazer para confirmar que tudo está funcionando?
 
 📋 RECOMMENDATION
 Category:       Reliability
-Description:    Alterar redundância do disco managed de LRS para ZRS
-Resource:       disk-mongodb-pvc-01 (rg-srelab-eastus2)
+Description:    Change managed disk redundancy from LRS to ZRS
+Resource:       disk-db-pvc-01 (rg-myapp-eastus2)
 Advisor Impact: High
 
 ──────────────────────────────────────────────────────────────────
@@ -187,17 +207,16 @@ Advisor Impact: High
 ──────────────────────────────────────────────────────────────────
 Risk Level:          🟠 Medium Risk
 Estimated Downtime:  ~5-10 minutes
-Blast Radius:        MongoDB → makeline-service → order fulfillment
-Data Risk:           Nenhum (snapshot recomendado como precaução)
-Rollback Possible:   ✅ Sim — reverter para LRS
-Maintenance Window:  ⚠️ Necessária
+Blast Radius:        database pod → dependent backend services
+Data Risk:           None (snapshot recommended as precaution)
+Rollback Possible:   ✅ Yes — revert to LRS
+Maintenance Window:  ⚠️ Required
 
-Affected Services:
-| Service          | Impact                          | Customer-Facing? |
-|------------------|---------------------------------|-----------------|
-| MongoDB          | Offline durante operação        | Não (backend)   |
-| makeline-service | Não processa pedidos            | Indireto        |
-| store-admin      | Não exibe pedidos               | Não (interno)   |
-| order-service    | Pedidos enfileiram no RabbitMQ  | Indireto        |
-| store-front      | Checkout funciona, fulfillment pausado | Parcial  |
+Affected Workloads:
+| Workload        | Role         | Impact                          | End-user affected?   |
+|-----------------|--------------|---------------------------------|---------------------|
+| database        | Data store   | Offline during operation        | No (backend)        |
+| backend-api     | Internal API | Cannot process requests         | Indirect            |
+| admin-panel     | Internal     | Cannot display data             | No (internal)       |
+| web-frontend    | Customer-facing | Partial functionality          | Partial             |
 ```

@@ -1,203 +1,232 @@
 # 🎬 Demo Flow — Advisor Impact Analyzer
 
-## Objetivo
+## Objective
 
-Mostrar como o sub-agent transforma recomendações "paradas" do Azure Advisor em
-planos de execução acionáveis, resolvendo o gap que impede clientes de agir.
+Show how the sub-agent transforms "stuck" Azure Advisor recommendations into
+actionable execution plans, resolving the gap that prevents teams from acting.
 
-**Duração:** ~10-15 minutos
-**Público-alvo:** Clientes com recomendações do Advisor não atendidas
+The agent works with **any environment**. This demo flow uses the AKS Pet Store
+lab as a concrete example, but every prompt and technique applies to any Azure
+resource group with Advisor recommendations.
+
+**Duration:** ~10-15 minutes
+**Target audience:** Teams with unacted Advisor recommendations
 
 ---
 
-## Preparação (antes do demo)
+## Preparation (before the demo)
 
 ```bash
-# Verificar que há recomendações do Advisor disponíveis
-az advisor recommendation list --resource-group rg-srelab-eastus2 -o table
+# Verify that Advisor recommendations are available
+az advisor recommendation list --resource-group <your-rg> -o table
 
-# Se não houver recomendações visíveis, o Advisor pode levar até 24h
-# para gerar recomendações após o deploy. Nesse caso, use o prompt
-# "analise o impacto de mudar a redundância do disco de LRS para ZRS"
-# como cenário hipotético — o agente ainda fará a análise de dependências.
+# If no recommendations are visible, Advisor may take up to 24h
+# to generate recommendations after deployment. In that case, use
+# hypothetical prompts — the agent will still perform dependency analysis.
 ```
 
-> **Nota:** Para gerar recomendações de performance/cost do Advisor, o lab
-> precisa rodar por pelo menos 24-48h com carga (virtual-customer ativo).
-> O cenário `high-cpu` (`kubectl apply -f k8s/scenarios/high-cpu.yaml`)
-> rodando por 30-60 minutos também pode gerar recomendações de right-sizing.
+> **Note:** For performance/cost recommendations, resources need to run
+> for at least 24-48h with load. For the AKS Pet Store lab specifically,
+> running `high-cpu` scenario for 30-60 minutes can generate right-sizing
+> recommendations.
 
 ---
 
-## Act 1: O Problema (2 min)
+## Act 1: The Problem (2 min)
 
-**Narrativa para a audiência:**
+**Narrative for the audience:**
 
-> "Quantas recomendações do Azure Advisor vocês têm pendentes no ambiente?
-> 10? 50? 200? O problema não é que o Advisor está errado — é que ninguém
-> consegue avaliar se é seguro executar a mudança. Vamos resolver isso."
+> "How many pending Azure Advisor recommendations do you have in your
+> environment? 10? 50? 200? The problem isn't that Advisor is wrong — it's
+> that nobody can assess whether it's safe to execute the change. Let's fix that."
 
-### Prompt 1 — Mostrar recomendações pendentes
+### Prompt 1 — Show pending recommendations
 
 ```
-Quais são todas as recomendações do Azure Advisor para o resource group
-rg-srelab-eastus2? Mostre em formato de tabela com categoria, impacto
-e recurso afetado.
+What are all the Azure Advisor recommendations for my resource group?
+Show in table format with category, impact, and affected resource.
 ```
 
-**O que a audiência vê:**
-Tabela com recomendações reais do Advisor (reliability, cost, security, etc.)
+**What the audience sees:**
+Table with real Advisor recommendations (reliability, cost, security, etc.)
+
+**Key point:** The agent discovers the environment — it doesn't need to know
+what runs there beforehand.
 
 ---
 
 ## Act 2: Quick Wins (3 min)
 
-**Narrativa:**
+**Narrative:**
 
-> "Primeiro, vamos identificar o que podemos fazer AGORA, sem risco."
+> "First, let's identify what we can do RIGHT NOW, with zero risk."
 
-### Prompt 2 — Identificar ações seguras
+### Prompt 2 — Identify safe actions
 
 ```
-Quais dessas recomendações são "quick wins" — posso executar agora,
-sem causar downtime e sem risco? Classifique cada uma por nível de risco.
+Which of these recommendations are "quick wins" — I can execute them now,
+without causing downtime and without risk? Classify each one by risk level.
 ```
 
-**O que a audiência vê:**
-- Tabela com classificação 🟢🟡🟠🔴 para cada recomendação
-- Quick wins destacadas (ex: habilitar diagnostic settings, soft delete)
-- Mensagem clara: "Estas 3 podem ser executadas agora sem impacto"
+**What the audience sees:**
+- Table with 🟢🟡🟠🔴 classification for each recommendation
+- Quick wins highlighted (e.g., enable diagnostic settings, soft delete)
+- Clear message: "These N can be executed now with zero impact"
 
 **Talking point:**
-> "Vejam — X recomendações podem ser resolvidas agora mesmo, sem nenhum risco.
-> São as que ficam paradas porque ninguém separou o joio do trigo."
+> "See — X recommendations can be resolved right now, no risk at all.
+> These are the ones that sit idle because nobody separated safe from risky."
 
 ---
 
-## Act 3: Deep Dive em Recomendação de Risco (5 min)
+## Act 3: Deep Dive on a Risky Recommendation (5 min)
 
-**Narrativa:**
+**Narrative:**
 
-> "Agora vamos pegar uma recomendação que causa medo — uma mudança de
-> redundância ou resize que ninguém quer executar sem saber o impacto."
+> "Now let's take a recommendation that scares people — a redundancy change
+> or resize that nobody wants to execute without knowing the impact."
 
-### Prompt 3 — Análise de impacto detalhada
+### Prompt 3 — Detailed impact analysis
 
 ```
-Analise em profundidade o impacto de executar a recomendação de
-[escolher uma recomendação de reliability ou performance].
-Quero saber: downtime estimado, serviços afetados, se tem rollback,
-e o plano completo de execução.
+Analyze in depth the impact of executing the [choose a reliability or
+performance recommendation]. I want to know: estimated downtime, affected
+workloads, whether there's rollback, and the complete execution plan.
 ```
 
-**Se não houver recomendações de reliability, use:**
+**Alternative if no reliability recommendations exist:**
 ```
-Analise o impacto de fazer upgrade do node pool do AKS para a
-próxima versão do Kubernetes. Quero o plano completo com pre-checks,
-execução, post-checks e rollback.
+Analyze the impact of upgrading the AKS node pool to the next
+Kubernetes version. Give me the complete plan with pre-checks,
+execution, post-checks, and rollback.
 ```
 
-**O que a audiência vê:**
-- Risk Level com emoji (🟠 Medium Risk)
-- Downtime estimado em minutos
-- Tabela de serviços afetados com flag customer-facing
-- **Plano de execução completo:**
-  - ☐ Pre-checks (snapshot, verificar fila, parar load)
-  - Comandos az cli específicos
-  - ☐ Post-checks (validar pods, testar fluxo)
-  - Rollback plan com comandos
+**What the audience sees:**
+- Risk Level with emoji (🟠 Medium Risk)
+- Estimated downtime in minutes
+- Table of affected workloads with end-user impact flag
+- **Complete execution plan:**
+  - ☐ Pre-checks (snapshot, verify queues, stop load)
+  - Specific az cli / kubectl commands
+  - ☐ Post-checks (validate pods, test flows)
+  - Rollback plan with commands
 
 **Talking point:**
-> "É ISSO que faltava. Não é a recomendação em si — é o plano de execução
-> com análise de risco. Agora o cliente pode tomar uma decisão informada."
+> "THIS is what was missing. It's not the recommendation itself — it's the
+> execution plan with risk analysis. Now the team can make an informed decision."
+
+**Key point for generic environments:** The agent built the workload impact
+table from what it discovered — not from a predefined list.
 
 ---
 
-## Act 4: Plano de Execução Batch (3 min)
+## Act 4: Batch Execution Plan (3 min)
 
-**Narrativa:**
+**Narrative:**
 
-> "E se eu quiser resolver TODAS as recomendações? Qual a melhor ordem?"
+> "What if I want to resolve ALL recommendations? What's the best order?"
 
-### Prompt 4 — Plano completo ordenado
+### Prompt 4 — Complete ordered plan
 
 ```
-Crie um plano de execução para TODAS as recomendações pendentes,
-ordenado do menor para o maior risco. Identifique quais podem ser
-feitas em paralelo e estime o tempo total.
+Create an execution plan for ALL pending recommendations, ordered
+from lowest to highest risk. Identify which can be done in parallel
+and estimate total time.
 ```
 
-**O que a audiência vê:**
-- Ordem de execução otimizada
-- Agrupamento: primeiro 🟢, depois 🟡, depois 🟠, depois 🔴
-- Quais podem ser paralelizadas
-- Tempo total estimado
-- Recomendação: "As primeiras 5 podem ser feitas em 1 hora sem janela de manutenção"
+**What the audience sees:**
+- Optimized execution order
+- Grouping: first 🟢, then 🟡, then 🟠, then 🔴
+- Which can be parallelized
+- Total estimated time
+- Clear guidance: "The first N can be done in 1 hour without a maintenance window"
 
 **Talking point:**
-> "Em vez de recomendações isoladas que ninguém age, temos um plano
-> operacional completo. O cliente pode agendar uma janela e resolver tudo."
+> "Instead of isolated recommendations nobody acts on, we have a complete
+> operational plan. The team can schedule a window and resolve everything."
 
 ---
 
-## Act 5: Execução e Validação (2 min, opcional)
+## Act 5: Execution and Validation (2 min, optional)
 
-**Se o tempo permitir e houver uma recomendação 🟢 Safe:**
+**If time permits and there's a 🟢 Safe recommendation:**
 
-### Prompt 5 — Executar uma quick win
+### Prompt 5 — Execute a quick win
 
 ```
-Execute a recomendação [quick win escolhida] e valide que tudo
-continua funcionando após a mudança.
+Execute recommendation [chosen quick win] and validate that everything
+continues working after the change.
 ```
 
-**O que a audiência vê:**
-- Agente executa os pre-checks
-- Aplica a mudança
-- Roda os post-checks
-- Confirma: "✅ Recomendação aplicada com sucesso. Todos os serviços operacionais."
+**What the audience sees:**
+- Agent executes pre-checks
+- Applies the change
+- Runs post-checks
+- Confirms: "✅ Recommendation applied successfully. All workloads operational."
 
 ---
 
-## Encerramento
+## Closing
 
-**Narrativa final:**
+**Final narrative:**
 
-> "O Azure Advisor sabe O QUE fazer. O SRE Agent sabe diagnosticar problemas.
-> O Advisor Impact Analyzer é a ponte que faltava: ele analisa SE é seguro
-> fazer e COMO fazer. É isso que transforma recomendações paradas em ações
-> executadas."
+> "Azure Advisor knows WHAT to do. SRE Agent knows how to diagnose problems.
+> The Advisor Impact Analyzer is the bridge: it analyzes WHETHER it's safe
+> and HOW to do it. That's what turns stale recommendations into executed actions."
 
 ---
 
-## Prompts Alternativos
+## Alternative Prompts
 
-Se precisar adaptar o demo:
+Adapt to your demo environment:
 
 ```
-# Foco em custo
-Quais recomendações do Advisor vão gerar economia? Para cada uma,
-compare o saving estimado com o risco operacional de executar.
+# Cost focus
+Which Advisor recommendations will generate savings? For each one,
+compare the estimated saving with the operational risk of executing.
 
-# Foco em segurança
-Analise as recomendações de segurança do Advisor. Quais são as mais
-urgentes e quais posso aplicar sem causar disrupção?
+# Security focus
+Analyze the security recommendations from Advisor. Which are most
+urgent and which can I apply without causing disruption?
 
-# Cenário específico
-Preciso fazer upgrade do Kubernetes no AKS de 1.28 para 1.29.
-Analise o impacto completo e me dê o plano de execução.
+# Specific scenario (any environment)
+I need to upgrade Kubernetes on AKS from 1.31 to 1.32.
+Analyze the complete impact and give me the execution plan.
 
-# Cenário de disco
-O Advisor recomenda mudar o disco managed de LRS para ZRS.
-Esse disco é usado pelo MongoDB no AKS. Analise o impacto.
+# Disk scenario (any environment with managed disks)
+Advisor recommends changing managed disk redundancy from LRS to ZRS.
+This disk is used by a database pod. Analyze the impact.
+
+# PaaS scenario (App Service environment)
+Advisor recommends upgrading my App Service plan from S1 to P1v3.
+Analyze the impact on my web apps and slot swaps.
+```
+
+---
+
+## Demo with the AKS Pet Store Lab
+
+If using the lab from this repository:
+
+```bash
+# Ensure the lab is deployed and healthy
+kubectl get pods -n pets
+
+# Useful resource group name
+# rg-srelab-eastus2 (default)
+
+# To generate more Advisor recommendations, run high-cpu scenario:
+kubectl apply -f k8s/scenarios/high-cpu.yaml
+# Wait 30-60 minutes, then check Advisor
 ```
 
 ---
 
 ## Troubleshooting
 
-| Problema | Solução |
-|----------|---------|
-| Advisor não mostra recomendações | Lab precisa rodar 24-48h para Advisor gerar recomendações. Use cenários hipotéticos no demo. |
-| Recomendações são apenas "generic" | Rode o cenário `high-cpu` por 30-60 min para gerar recomendações de right-sizing. |
-| Agente não consegue listar recommendations | Verifique que o SRE Agent tem role Reader na subscription. |
+| Problem | Solution |
+|---------|----------|
+| Advisor shows no recommendations | Resources need to run 24-48h for Advisor to generate recommendations. Use hypothetical scenarios in the demo. |
+| Recommendations are only "generic" | Run workloads with load for 30-60 min to generate right-sizing recommendations. |
+| Agent cannot list recommendations | Verify that the SRE Agent has Reader role on the subscription. |
+| Agent assumes wrong workloads | Verify the agent ran discovery commands. If it used old data, ask it to "re-discover the environment first". |

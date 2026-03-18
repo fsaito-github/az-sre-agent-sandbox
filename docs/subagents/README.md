@@ -12,7 +12,7 @@ The Azure SRE Agent already excels at incident diagnosis, automated remediation,
 | [🛒 E-Commerce Domain Expert](ecommerce-expert/) | Business-aware diagnosis — translates infra failures to order/revenue impact | Knows K8s but not app business logic |
 | [📋 PIR Generator](pir-generator/) | Structured Post-Incident Review documents (timeline, RCA, action items) | Diagnoses incidents but doesn't generate formal post-mortems |
 | [🔐 Security Posture Auditor](security-auditor/) | Proactive K8s security audit (CIS benchmark, secrets, RBAC, network policies) | Diagnoses incidents, doesn't audit compliance |
-| [🔍 Advisor Impact Analyzer](advisor-impact-analyzer/) | Analyzes operational impact of Advisor recommendations with execution plans and rollback | Doesn't bridge Advisor recommendations to safe execution |
+| [🔍 Advisor Impact Analyzer](advisor-impact-analyzer/) | Dynamically discovers workloads and dependencies in any Azure environment, then analyzes operational impact of Advisor recommendations with execution plans and rollback | Doesn't bridge Advisor recommendations to safe execution |
 
 ## Quick Start
 
@@ -52,7 +52,10 @@ docs/subagents/
 ├── advisor-impact-analyzer/
 │   ├── subagent.yaml           # Paste into Subagent Builder
 │   ├── README.md               # Documentation & test prompts
-│   └── demo-flow.md            # Step-by-step demo script
+│   ├── demo-flow.md            # Step-by-step demo script
+│   ├── advisor-impact-report.md # Example report (from AKS Pet Store lab)
+│   └── knowledge/
+│       └── impact-investigation-framework.md  # Upload to Knowledge Base
 ├── slo-guardian/
 │   ├── subagent.yaml           # Paste into Subagent Builder
 │   ├── README.md               # Documentation & test prompts
