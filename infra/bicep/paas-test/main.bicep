@@ -21,6 +21,12 @@ param location string = resourceGroup().location
 @description('Unique suffix for resource names')
 param uniqueSuffix string = uniqueString(resourceGroup().id)
 
+@description('Azure AD Object ID of the SQL admin user')
+param sqlAdminObjectId string
+
+@description('Azure AD login name for SQL admin')
+param sqlAdminLogin string
+
 @description('Name prefix for resources')
 param prefix string = 'paastest'
 
@@ -32,12 +38,11 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: '${prefix}-plan-${uniqueSuffix}'
   location: location
   sku: {
-    name: 'S1'
-    tier: 'Standard'
-    capacity: 1
+    name: 'F1'
+    tier: 'Free'
   }
   properties: {
-    reserved: true // Linux
+    reserved: false // Windows (shared compute, no VM quota)
   }
 }
 
@@ -47,8 +52,9 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
   properties: {
     serverFarmId: appServicePlan.id
     siteConfig: {
-      linuxFxVersion: 'NODE|20-lts'
-      alwaysOn: true
+      linuxFxVersion: ''
+      netFrameworkVersion: 'v8.0'
+      alwaysOn: false
       healthCheckPath: '/health'
       appSettings: [
         {
@@ -85,8 +91,14 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
   name: '${prefix}-sql-${uniqueSuffix}'
   location: location
   properties: {
-    administratorLogin: 'sqladmin'
-    administratorLoginPassword: 'P@ssw0rd${uniqueSuffix}!'
+    administrators: {
+      administratorType: 'ActiveDirectory'
+      azureADOnlyAuthentication: true
+      login: sqlAdminLogin
+      sid: sqlAdminObjectId
+      tenantId: subscription().tenantId
+      principalType: 'User'
+    }
     minimalTlsVersion: '1.2'
   }
 }
