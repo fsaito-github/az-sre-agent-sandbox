@@ -1,0 +1,55 @@
+name: Lint
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  yaml-lint:
+    name: Validate YAML
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Lint subagent YAML files
+        run: |
+          find docs/subagents -name "*.yaml" -o -name "*.yml" | while read f; do
+            echo "Checking $f..."
+            yamllint -d "{extends: relaxed, rules: {line-length: disable, truthy: disable}}" "$f"
+          done
+
+  markdown-lint:
+    name: Validate Markdown
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check markdown links
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          use-quiet-mode: 'yes'
+          config-file: '.github/markdown-link-check-config.json'
+        continue-on-error: true
+
+  bicep-validate:
+    name: Validate Bicep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Azure CLI
+        uses: azure/cli@v2
+        with:
+          inlineScript: az bicep install
+
+      - name: Validate Bicep templates
+        run: |
+          for f in infra/bicep/*.bicep infra/bicep/modules/*.bicep; do
+            echo "Validating $f..."
+            az bicep build --file "$f" --stdout > /dev/null
+          done
