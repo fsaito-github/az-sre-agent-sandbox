@@ -79,6 +79,34 @@ without causing downtime and without risk? Classify each one by risk level.
 
 ---
 
+## Act 2.5: Cost Impact (3 min)
+
+**Narrative:**
+
+> "Before we deep-dive into risky changes, let's understand the financial
+> picture. Which recommendations save money? Which ones cost more?"
+
+### Prompt 2.5 — Cost analysis
+
+```
+For each Advisor recommendation, show me the cost impact: will it
+increase or decrease my monthly Azure spend? Use real pricing data
+and show the total monthly delta if I implement everything.
+```
+
+**What the audience sees:**
+- Each recommendation tagged with 💰 cost delta (+$X or -$X or $0)
+- Source of pricing data (Azure Retail Prices API, Advisor savings, estimate)
+- Financial summary: total additional cost vs total savings
+- ROI assessment for expensive recommendations
+
+**Talking point:**
+> "Now the team knows not just the risk, but the cost. Some recommendations
+> save money — those are easy wins. Others cost more — but now you can
+> evaluate whether the reliability improvement is worth the investment."
+
+---
+
 ## Act 3: Deep Dive on a Risky Recommendation (5 min)
 
 **Narrative:**
@@ -184,6 +212,10 @@ Adapt to your demo environment:
 # Cost focus
 Which Advisor recommendations will generate savings? For each one,
 compare the estimated saving with the operational risk of executing.
+
+# Cost focus — total investment
+What's the total monthly cost if I implement ALL Advisor recommendations?
+Break it down by: savings, additional costs, and net impact.
 
 # Security focus
 Analyze the security recommendations from Advisor. Which are most

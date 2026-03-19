@@ -24,6 +24,7 @@ a **complete execution plan with risk analysis**, including:
 - Downtime estimation based on real environment state
 - Blast radius mapping (affected workloads and end users)
 - Risk classification (🟢 Safe → 🔴 High Risk)
+- **💰 Cost impact analysis** with real-time pricing from Azure Retail Prices API
 - Step-by-step plan with pre-checks, execution, post-checks, and rollback
 - Timing recommendation (maintenance window or immediate execution)
 
@@ -53,6 +54,7 @@ SaaS platform, IoT backend — without rewriting its configuration.
 | **Dependency mapping** | Partial | ✅ Dynamic (K8s + Azure) |
 | **Execution plan with rollback** | ❌ | ✅ Structured |
 | **Risk classification** | ❌ | ✅ 4 levels |
+| **💰 Cost impact analysis** | ❌ | ✅ Real-time pricing (3 sources) |
 | **Batch analysis and prioritization** | ❌ | ✅ With execution order |
 
 The SRE Agent knows that Advisor recommends something, but it doesn't analyze
@@ -104,7 +106,8 @@ Advisor Impact Analyzer (sub-agent)
     ├── 4. Consults Knowledge Base (impact-investigation-framework.md)
     │       → Framework teaches HOW to investigate, not pre-built answers
     ├── 5. REASONS about impact using discovered data
-    ├── 6. Generates impact table PER WORKLOAD with real data
+    ├── 6. ASSESSES cost impact using real-time pricing data
+    ├── 7. Generates impact table PER WORKLOAD with real data
     │
     ↓
 Returns analysis to chat
@@ -125,6 +128,25 @@ Returns analysis to chat
 | **B — Azure PaaS** | App Service, Functions, VMs, managed DBs | az cli + KQL |
 | **C — Hybrid** | AKS + PaaS resources in same resource group | kubectl + az cli + KQL |
 | **D — Partially observable** | Limited tool access or empty results | Best-effort with confidence notes |
+
+## Cost Analysis Sources
+
+Every recommendation includes a **💰 Cost Impact** section. The agent uses
+three data sources in priority order:
+
+| Priority | Source | How it works | Auth required? |
+|----------|--------|-------------|----------------|
+| 1 | **Azure Retail Prices API** | Public REST API queried via `az rest` — returns real-time per-hour pricing by SKU, region, and meter | ❌ No |
+| 2 | **Advisor savings data** | Some recommendations include `extendedProperties.savingsAmount` with pre-calculated savings | ✅ Reader role |
+| 3 | **Azure Cost Management** | `az costmanagement query` shows actual historical spend on the resource | ✅ Cost Management Reader |
+
+If all three fail, the agent falls back to a static reference table and marks
+the estimate as approximate.
+
+The agent always states which source it used:
+- "💰 Cost from Azure Retail Prices API (real-time)"
+- "💰 Cost from Advisor savings data"
+- "💰 Cost estimated (approximate — verify with Azure Pricing Calculator)"
 
 ## Test Prompts
 
@@ -219,4 +241,9 @@ Affected Workloads:
 | backend-api     | Internal API | Cannot process requests         | Indirect            |
 | admin-panel     | Internal     | Cannot display data             | No (internal)       |
 | web-frontend    | Customer-facing | Partial functionality          | Partial             |
+
+💰 COST IMPACT
+| Current cost | After change | Monthly delta | Source |
+|-------------|-------------|--------------|--------|
+| $4.50/month (LRS 8Gi) | $9.00/month (ZRS 8Gi) | +$4.50/month | Azure Retail Prices API |
 ```
