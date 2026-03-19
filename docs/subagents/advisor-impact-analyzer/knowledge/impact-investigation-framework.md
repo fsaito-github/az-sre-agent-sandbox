@@ -112,10 +112,73 @@ Add a **⚠️ CONFIDENCE NOTE** to your report listing what you could not verif
 ## Step 3: Discover dependencies between workloads
 
 The agent MUST NOT use a static dependency map. It MUST DISCOVER dependencies.
+Use the FIRST method that returns data; fall back to the next.
 
-### For Kubernetes workloads
+### Method 1: Application Insights — KQL (PREFERRED)
 
-#### Method 1: Environment variables (most reliable)
+If Application Insights is configured for the environment, this is the most
+accurate source of dependency data. App Insights tracks ACTUAL runtime calls
+between services — HTTP requests, database queries, queue operations, external
+API calls — with success rates and latency.
+
+Use the `execute_kusto_query` tool with these queries:
+
+```kql
+// Full dependency map: who calls whom (last 24h)
+// This is the same data that powers the Application Map in Azure Portal
+dependencies
+| where timestamp > ago(24h)
+| summarize
+    CallCount=count(),
+    AvgDuration=avg(duration),
+    FailRate=round(100.0*countif(success == false)/count(), 1)
+    by caller=cloud_RoleName, callee=target, type=dependency_Type
+| order by caller asc, CallCount desc
+```
+
+```kql
+// Service-to-service calls with health status (last 1h snapshot)
+dependencies
+| where timestamp > ago(1h)
+| summarize Calls=count(), Failures=countif(success == false)
+    by Source=cloud_RoleName, Target=target, Type=dependency_Type
+| extend HealthPct = round(100.0*(Calls-Failures)/Calls, 1)
+| order by Source asc
+```
+
+```kql
+// Discover all unique service roles (cloud_RoleName)
+union requests, dependencies
+| where timestamp > ago(24h)
+| distinct cloud_RoleName
+| order by cloud_RoleName asc
+```
+
+```kql
+// Find external dependencies (outside the cluster/app)
+dependencies
+| where timestamp > ago(24h)
+| where dependency_Type !in ("InProc", "")
+| summarize CallCount=count(), FailRate=round(100.0*countif(success == false)/count(), 1)
+    by Target=target, Type=dependency_Type
+| order by CallCount desc
+```
+
+**Why this is better than env vars:**
+- Shows ACTUAL calls, not just configured connections
+- Includes call volume, latency, and failure rates
+- Detects dependencies that aren't in env vars (service discovery, hardcoded URLs)
+- Shows which dependencies are healthy vs failing right now
+- Same data source the native SRE Agent uses for diagnosis
+
+**When App Insights is NOT available:**
+- The queries above will return empty results or fail
+- Fall back to Methods 2-4 below
+- Note in your report: "⚠️ App Insights not configured — dependency map based on infrastructure-level discovery only"
+
+### Method 2: Environment variables (infrastructure-level)
+
+For Kubernetes workloads:
 ```bash
 kubectl get pods -n <ns> -o json | python3 -c "
 import json, sys
@@ -130,12 +193,12 @@ for pod in pods:
 "
 ```
 
-#### Method 2: Service endpoints
+### Method 3: Service endpoints
 ```bash
 kubectl get endpoints -n <ns> -o wide
 ```
 
-#### Method 3: Logs (if available)
+### Method 4: Logs (if available)
 ```bash
 kubectl logs -n <ns> deploy/<service> --tail=20 2>/dev/null | grep -i "connect\|error\|refused"
 ```
@@ -154,6 +217,19 @@ az functionapp config appsettings list --name <func> --resource-group <rg> -o js
 az network private-endpoint list --resource-group <rg> -o table 2>/dev/null
 ```
 
+### When to use each method
+
+| Method | Best for | Misses |
+|--------|---------|--------|
+| **App Insights KQL** | Real runtime calls, volumes, health | Services without App Insights SDK |
+| **Env vars** | Configured connections | Unused connections, service-discovery deps |
+| **Endpoints** | K8s service routing | External deps, queue consumers |
+| **Logs** | Connection errors, refusals | Healthy connections (no log output) |
+| **PaaS settings** | App Service/Function connections | Runtime-only dependencies |
+
+**Best practice:** Use App Insights FIRST, then COMPLEMENT with env vars/endpoints
+to catch services that don't have App Insights instrumented.
+
 ### How to interpret dependencies
 
 - Service A has env/connection string pointing to B → A depends on B
@@ -161,6 +237,7 @@ az network private-endpoint list --resource-group <rg> -o table 2>/dev/null
 - Message queues (RabbitMQ, Kafka, Service Bus) = usually allow buffering
 - If B goes down, A may fail — look for retry/circuit breaker config
 - External dependencies (outside the resource group) = note but don't analyze deeply
+- App Insights FailRate > 0% on a dependency = already degraded, higher risk for changes
 
 ---
 

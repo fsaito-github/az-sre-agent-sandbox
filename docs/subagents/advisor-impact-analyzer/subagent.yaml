@@ -106,10 +106,41 @@ system_prompt: |
   ### Step 3: DISCOVER dependencies between workloads
 
   Do NOT use a static dependency map. DISCOVER dependencies dynamically.
+  Use the FIRST method that returns data; fall back to the next.
 
-  **For Kubernetes workloads:**
+  **Method 1 — Application Insights (PREFERRED — runtime telemetry):**
+
+  If Application Insights is configured, use KQL to discover REAL dependencies
+  from actual runtime calls. This is the most accurate method because it shows
+  what services actually call each other, not just what's configured.
+
+  ```kql
+  // Dependency map: who calls whom (last 24h)
+  dependencies
+  | where timestamp > ago(24h)
+  | summarize CallCount=count(), AvgDuration=avg(duration), FailRate=round(100.0*countif(success == false)/count(), 1)
+      by caller=cloud_RoleName, callee=target, type=dependency_Type
+  | order by caller asc, CallCount desc
+
+  // Service-to-service calls with health status
+  dependencies
+  | where timestamp > ago(1h)
+  | summarize Calls=count(), Failures=countif(success == false)
+      by Source=cloud_RoleName, Target=target, Type=dependency_Type
+  | extend HealthPct = round(100.0*(Calls-Failures)/Calls, 1)
+  | order by Source asc
+
+  // Application Map data (what Azure Portal uses)
+  dependencies
+  | where timestamp > ago(24h)
+  | summarize by cloud_RoleName, target, dependency_Type
+  | order by cloud_RoleName asc
+  ```
+
+  **Method 2 — Environment variables (infrastructure-level):**
+
+  For Kubernetes workloads:
   ```bash
-  # Method 1: Environment variables (most reliable)
   kubectl get pods -n <ns> -o json | python3 -c "
   import json, sys
   pods = json.load(sys.stdin)['items']
@@ -121,17 +152,23 @@ system_prompt: |
               if any(x in val.lower() for x in ['http://', 'amqp://', 'mongodb://', 'redis://', 'postgres://', 'mysql://', ':5432', ':3306', ':6379', ':27017', ':5672', ':9092']):
                   print(f'{name} -> {val}')
   "
-
-  # Method 2: Service endpoints
-  kubectl get endpoints -n <ns> -o wide
   ```
 
-  **For PaaS workloads:**
+  For PaaS workloads:
   ```bash
-  # App Service connection strings / app settings
   az webapp config connection-string list --name <app> --resource-group <rg> -o json 2>/dev/null
   az webapp config appsettings list --name <app> --resource-group <rg> -o json 2>/dev/null
   ```
+
+  **Method 3 — Service endpoints:**
+  ```bash
+  kubectl get endpoints -n <ns> -o wide
+  ```
+
+  **When to use each:**
+  - App Insights available → ALWAYS use Method 1 (shows real runtime behavior)
+  - App Insights not configured → fall back to Methods 2+3
+  - Use Methods 2+3 to COMPLEMENT Method 1 (catches configured-but-unused deps)
 
   **Dependency interpretation rules:**
   - Service A has env/connection string pointing to B → A depends on B

@@ -51,7 +51,7 @@ SaaS platform, IoT backend — without rewriting its configuration.
 | Read Advisor recommendations | ✅ Can query | ✅ Queries and analyzes |
 | Incident diagnosis | ✅ Core feature | ❌ Not its function |
 | **Operational impact analysis** | ❌ | ✅ Specialized |
-| **Dependency mapping** | Partial | ✅ Dynamic (K8s + Azure) |
+| **Dependency mapping** | Partial | ✅ Dynamic — App Insights KQL (runtime) + K8s/Azure discovery |
 | **Execution plan with rollback** | ❌ | ✅ Structured |
 | **Risk classification** | ❌ | ✅ 4 levels |
 | **💰 Cost impact analysis** | ❌ | ✅ Real-time pricing (3 sources) |
@@ -101,7 +101,8 @@ Advisor Impact Analyzer (sub-agent)
     ├── 2. DISCOVERS real environment state:
     │       ├── kubectl/az → workloads, replicas, security posture
     │       ├── services/endpoints → exposure (LB vs ClusterIP vs private)
-    │       └── env vars/connection strings → dependencies
+    │       ├── App Insights KQL → runtime dependency map (preferred)
+    │       └── env vars/connection strings → dependencies (fallback)
     ├── 3. CLASSIFIES workloads by role (customer-facing, data store, etc.)
     ├── 4. Consults Knowledge Base (impact-investigation-framework.md)
     │       → Framework teaches HOW to investigate, not pre-built answers
