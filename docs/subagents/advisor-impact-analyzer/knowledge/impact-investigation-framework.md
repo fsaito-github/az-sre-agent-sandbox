@@ -397,7 +397,111 @@ storage tier) almost NEVER affect running workloads. Impact is limited to:
 For EVERY recommendation that changes a resource SKU, tier, size, count, or
 adds/removes a resource, investigate the cost delta.
 
-### Discover current pricing tier
+The agent has 3 sources of cost data, ordered by reliability. Use the FIRST
+source that returns data; fall back to the next if it doesn't.
+
+### Source 1: Azure Retail Prices API (PREFERRED — real-time, no auth required)
+
+The Azure Retail Prices API is PUBLIC and needs NO authentication. Use it to
+get the actual per-hour price for any Azure resource by SKU, region, and meter.
+
+```bash
+# Generic pattern — query VM pricing for a specific size and region
+az rest --method get \
+  --url "https://prices.azure.com/api/retail/prices?\$filter=serviceName eq 'Virtual Machines' and armSkuName eq '<VM_SIZE>' and armRegionName eq '<REGION>' and priceType eq 'Consumption' and contains(meterName, 'Spot') eq false and contains(meterName, 'Low Priority') eq false" \
+  --query "Items[?contains(productName, 'Windows') == \`false\`].{sku:armSkuName, meter:meterName, price:retailPrice, unit:unitOfMeasure, currency:currencyCode}" -o table 2>/dev/null
+```
+
+**Common queries:**
+
+```bash
+# VM price — e.g., Standard_D2s_v3 in eastus2
+az rest --method get \
+  --url "https://prices.azure.com/api/retail/prices?\$filter=serviceName eq 'Virtual Machines' and armSkuName eq 'Standard_D2s_v3' and armRegionName eq 'eastus2' and priceType eq 'Consumption'" \
+  --query "Items[?contains(productName, 'Windows') == \`false\` && contains(meterName, 'Spot') == \`false\` && contains(meterName, 'Low Priority') == \`false\`].{sku:armSkuName, price:retailPrice, unit:unitOfMeasure}" -o table 2>/dev/null
+
+# Compare two VM sizes (current vs recommended)
+# Run the query above for BOTH sizes and calculate the delta
+
+# ACR pricing by tier
+az rest --method get \
+  --url "https://prices.azure.com/api/retail/prices?\$filter=serviceName eq 'Container Registry' and armRegionName eq '<REGION>' and priceType eq 'Consumption'" \
+  --query "Items[].{sku:skuName, meter:meterName, price:retailPrice, unit:unitOfMeasure}" -o table 2>/dev/null
+
+# NAT Gateway pricing
+az rest --method get \
+  --url "https://prices.azure.com/api/retail/prices?\$filter=serviceName eq 'Virtual Network' and contains(meterName, 'NAT Gateway') and armRegionName eq '<REGION>'" \
+  --query "Items[].{meter:meterName, price:retailPrice, unit:unitOfMeasure}" -o table 2>/dev/null
+
+# Private Endpoint pricing
+az rest --method get \
+  --url "https://prices.azure.com/api/retail/prices?\$filter=serviceName eq 'Azure Private Link' and armRegionName eq '<REGION>'" \
+  --query "Items[].{meter:meterName, price:retailPrice, unit:unitOfMeasure}" -o table 2>/dev/null
+
+# App Service Plan pricing
+az rest --method get \
+  --url "https://prices.azure.com/api/retail/prices?\$filter=serviceName eq 'Azure App Service' and armSkuName eq '<SKU>' and armRegionName eq '<REGION>'" \
+  --query "Items[?contains(productName, 'Windows') == \`false\`].{sku:armSkuName, price:retailPrice, unit:unitOfMeasure}" -o table 2>/dev/null
+```
+
+**How to calculate monthly cost from hourly price:**
+```
+Monthly cost = hourly_price × 730 (average hours per month)
+```
+
+Use Python if the calculation is complex:
+```python
+current_hourly = <price from query for current SKU>
+new_hourly = <price from query for recommended SKU>
+node_count = <from az aks nodepool list>
+monthly_delta = (new_hourly - current_hourly) * 730 * node_count
+print(f"Monthly delta: ${monthly_delta:+.2f}/month")
+```
+
+### Source 2: Advisor's own cost data
+
+Some Advisor recommendations (especially Cost category) include savings
+estimates in their `extendedProperties`. Check this FIRST for Cost-type
+recommendations.
+
+```bash
+az advisor recommendation list --resource-group <rg> -o json \
+  | python3 -c "
+import json, sys
+recs = json.load(sys.stdin)
+for r in recs:
+    ext = r.get('extendedProperties', {})
+    savings = ext.get('savingsAmount', ext.get('annualSavingsAmount', ''))
+    currency = ext.get('savingsCurrency', 'USD')
+    name = r.get('shortDescription', {}).get('problem', 'unknown')
+    cat = r.get('category', '')
+    if savings:
+        print(f'💰 [{cat}] {name}: saves {currency} {savings}')
+    else:
+        print(f'   [{cat}] {name}: no savings data from Advisor')
+"
+```
+
+### Source 3: Azure Cost Management (actual historical spend)
+
+Use this to understand CURRENT spend on a resource before estimating changes:
+
+```bash
+# Current month spend by resource (requires Cost Management Reader role)
+az costmanagement query \
+  --type ActualCost \
+  --scope "subscriptions/<sub-id>/resourceGroups/<rg>" \
+  --timeframe MonthToDate \
+  --dataset-grouping name=ResourceId type=Dimension \
+  -o json 2>/dev/null
+```
+
+If this command fails (permissions or API version), fall back to Source 1.
+
+### Discover current pricing tiers of affected resources
+
+Before calculating deltas, you need to know the current state:
+
 ```bash
 # AKS node pools — current VM size and count
 az aks nodepool list --resource-group <rg> --cluster-name <aks> \
@@ -422,34 +526,17 @@ az cosmosdb show --name <cosmos> --resource-group <rg> \
 az redis show --name <redis> --resource-group <rg> \
   --query "{sku:sku.name, family:sku.family, capacity:sku.capacity}" -o json 2>/dev/null
 
-# Private endpoints — count (each costs ~$7-10/month)
+# Private endpoints — count
 az network private-endpoint list --resource-group <rg> --query "length(@)" -o tsv 2>/dev/null
 
 # NAT Gateway — check if exists
 az network nat gateway list --resource-group <rg> -o table 2>/dev/null
 ```
 
-### Use Advisor's own cost data when available
-```bash
-# Some Advisor recommendations include savings estimates in extendedProperties
-az advisor recommendation list --resource-group <rg> -o json \
-  | python3 -c "
-import json, sys
-recs = json.load(sys.stdin)
-for r in recs:
-    ext = r.get('extendedProperties', {})
-    savings = ext.get('savingsAmount', ext.get('annualSavingsAmount', ''))
-    currency = ext.get('savingsCurrency', 'USD')
-    name = r.get('shortDescription', {}).get('problem', 'unknown')
-    if savings:
-        print(f'💰 {name}: saves {currency} {savings}')
-    else:
-        print(f'   {name}: no savings data from Advisor')
-"
-```
+### Fallback: Static cost reference
 
-### Common cost reference points
-Use these as rough estimates when exact pricing is not available:
+Use these ONLY when Sources 1-3 are not available. Prices are approximate
+USD pay-as-you-go rates and vary by region, EA discount, and reservations.
 
 | Change | Approximate monthly cost delta |
 |--------|-------------------------------|
@@ -466,6 +553,12 @@ Use these as rough estimates when exact pricing is not available:
 | Spot nodes vs regular | -60% to -80% savings |
 | Move to newer VM series (D→Dv5) | Typically ±0 to -10% |
 | Ephemeral OS disk | $0 to slight savings |
+
+⚠️ ALWAYS state which source you used for cost data:
+- "💰 Cost from Azure Retail Prices API (real-time)"
+- "💰 Cost from Advisor savings data"
+- "💰 Cost from Azure Cost Management (actual spend)"
+- "💰 Cost estimated from reference table (approximate — verify with Azure Pricing Calculator)"
 
 **Rules:**
 - Always show cost delta in the per-recommendation output
