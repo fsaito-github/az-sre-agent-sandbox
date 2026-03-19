@@ -9,7 +9,7 @@ The agent works with **any environment**. This demo flow uses the AKS Pet Store
 lab as a concrete example, but every prompt and technique applies to any Azure
 resource group with Advisor recommendations.
 
-**Duration:** ~10-15 minutes
+**Duration:** ~15-20 minutes
 **Target audience:** Teams with unacted Advisor recommendations
 
 ---
@@ -79,14 +79,14 @@ without causing downtime and without risk? Classify each one by risk level.
 
 ---
 
-## Act 2.5: Cost Impact (3 min)
+## Act 3: Cost Impact (3 min)
 
 **Narrative:**
 
 > "Before we deep-dive into risky changes, let's understand the financial
 > picture. Which recommendations save money? Which ones cost more?"
 
-### Prompt 2.5 — Cost analysis
+### Prompt 3 — Cost analysis
 
 ```
 For each Advisor recommendation, show me the cost impact: will it
@@ -107,14 +107,14 @@ and show the total monthly delta if I implement everything.
 
 ---
 
-## Act 3: Deep Dive on a Risky Recommendation (5 min)
+## Act 4: Deep Dive on a Risky Recommendation (5 min)
 
 **Narrative:**
 
 > "Now let's take a recommendation that scares people — a redundancy change
 > or resize that nobody wants to execute without knowing the impact."
 
-### Prompt 3 — Detailed impact analysis
+### Prompt 4 — Detailed impact analysis
 
 ```
 Analyze in depth the impact of executing the [choose a reliability or
@@ -148,13 +148,13 @@ table from what it discovered — not from a predefined list.
 
 ---
 
-## Act 4: Batch Execution Plan (3 min)
+## Act 5: Batch Execution Plan (3 min)
 
 **Narrative:**
 
 > "What if I want to resolve ALL recommendations? What's the best order?"
 
-### Prompt 4 — Complete ordered plan
+### Prompt 5 — Complete ordered plan
 
 ```
 Create an execution plan for ALL pending recommendations, ordered
@@ -175,11 +175,11 @@ and estimate total time.
 
 ---
 
-## Act 5: Execution and Validation (2 min, optional)
+## Act 6: Execution and Validation (2 min, optional)
 
 **If time permits and there's a 🟢 Safe recommendation:**
 
-### Prompt 5 — Execute a quick win
+### Prompt 6 — Execute a quick win
 
 ```
 Execute recommendation [chosen quick win] and validate that everything
@@ -262,3 +262,5 @@ kubectl apply -f k8s/scenarios/high-cpu.yaml
 | Recommendations are only "generic" | Run workloads with load for 30-60 min to generate right-sizing recommendations. |
 | Agent cannot list recommendations | Verify that the SRE Agent has Reader role on the subscription. |
 | Agent assumes wrong workloads | Verify the agent ran discovery commands. If it used old data, ask it to "re-discover the environment first". |
+| Agent output differs from Playground | Expected behavior — the main SRE Agent may summarize or truncate the sub-agent's response. Ask for "full detailed report" to get more complete output. |
+| Cost data shows "estimate" instead of real prices | The Azure Retail Prices API may be unreachable from the SRE Agent environment. Verify internet access or use the static reference table as fallback. |

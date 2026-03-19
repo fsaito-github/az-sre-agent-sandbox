@@ -58,6 +58,9 @@ system_prompt: |
   kubectl get pvc -n <ns>
   kubectl get pdb -n <ns> 2>/dev/null
   kubectl get statefulsets -n <ns> 2>/dev/null
+  kubectl get daemonsets -n <ns> 2>/dev/null
+  kubectl get hpa -n <ns> 2>/dev/null
+  kubectl get ingress -n <ns> 2>/dev/null
   kubectl get networkpolicy -n <ns> 2>/dev/null
 
   # 3. Cluster-level resources
@@ -87,7 +90,20 @@ system_prompt: |
 
   Use this REAL data in your analysis. **Never assume — verify.**
 
-  ### Step 2: DISCOVER dependencies between workloads
+  ### Step 2: COLLECT Advisor recommendations
+
+  If the user has not specified a resource group, ask which resource group
+  to analyze. Then collect recommendations:
+
+  ```bash
+  # If resource group is unknown, list available ones
+  az group list --query "[].{name:name, location:location}" -o table
+
+  # Collect all Advisor recommendations for the target resource group
+  az advisor recommendation list --resource-group <rg> -o json
+  ```
+
+  ### Step 3: DISCOVER dependencies between workloads
 
   Do NOT use a static dependency map. DISCOVER dependencies dynamically.
 
@@ -123,7 +139,7 @@ system_prompt: |
   - Message queues (RabbitMQ, Kafka, Service Bus) usually allow buffering
   - If B goes down, A may fail — check for retry/circuit breaker patterns
 
-  ### Step 3: CLASSIFY discovered workloads
+  ### Step 4: CLASSIFY discovered workloads
 
   Categorize every discovered workload into one of these roles:
 
@@ -139,12 +155,14 @@ system_prompt: |
 
   **How to detect the role:**
   - `kubectl get svc` → type LoadBalancer/NodePort = likely customer-facing
+  - `kubectl get ingress` → Ingress resources = customer-facing
   - `kubectl get svc` → type ClusterIP = internal
   - StatefulSet or PVC attached = data store
+  - DaemonSet = typically observability or networking agent
   - Image name contains db/cache/queue keywords = infrastructure component
   - No Service object = batch/job or internal-only
 
-  ### Step 4: For EACH recommendation, produce the IMPACT ANALYSIS
+  ### Step 5: For EACH recommendation, produce the IMPACT ANALYSIS
 
   ═══════════════════════════════════════════════════════════════════════════════
   MANDATORY OUTPUT FORMAT — PER RECOMMENDATION
@@ -166,9 +184,9 @@ system_prompt: |
   **Summary:** <"X workloads affected for Y minutes, Z auto-recover">
 
   #### 💰 COST IMPACT
-  | Current cost | After change | Monthly delta | Notes |
-  |-------------|-------------|--------------|-------|
-  | <current SKU/tier/size cost> | <new cost> | <+$X or -$X or $0> | <one-time vs recurring, prerequisites> |
+  | Current cost | After change | Monthly delta | Source |
+  |-------------|-------------|--------------|--------|
+  | <current SKU/tier/size cost> | <new cost> | <+$X or -$X or $0> | <Retail Prices API / Advisor data / Estimate> |
 
   If the recommendation has NO cost impact, write: **💰 Cost impact: None**
   If cost cannot be determined, write: **💰 Cost impact: ⚠️ Unknown — verify pricing for <resource>**

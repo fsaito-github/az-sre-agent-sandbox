@@ -106,10 +106,21 @@ These can be executed at any time, no maintenance window needed:
 
 ## 🟡 LOW RISK — Execute during low traffic (6 items)
 
+### 8. ACR Premium tier upgrade
+- **Risk**: 🟢 Safe (tier upgrade) | **Downtime**: None | **Rollback**: ✅ Downgrade to Basic
+- **Prerequisite for**: Geo-replication (#15) and Private Link (#19)
+- **Impact**: No workload affected — image pull continues working
+- **💰 Cost**: +$145/month _(Basic $5 → Premium $150)_ — Source: Azure Retail Prices API
+
 ### 9. Min 2 nodes in system pool
 - **Risk**: 🟡 Low | **Downtime**: None (node addition)
 - **Cost**: +$73/month _(1x Standard_D2s_v3 @ $0.10/hr × 730hrs)_ — Source: Azure Retail Prices API
 - **Impact**: ⚡ CRITICAL for HA — currently 1 system node is a SPOF
+
+### 10. Spot nodes for workloads
+- **Risk**: 🟡 Low | **Downtime**: None (new pool)
+- **Impact**: Spot VMs can be evicted anytime — suitable for load generators, not for data stores
+- **💰 Cost**: 💰 Saves 60-80% on compute for eligible workloads — Source: Azure Retail Prices API
 
 ### 11-14. Pod security hardening
 These require Kubernetes manifest changes:
@@ -128,6 +139,12 @@ These require Kubernetes manifest changes:
 
 ## 🟠 MEDIUM RISK — Requires Maintenance Window (6 items)
 
+### 15. ACR Geo-replication
+- **Risk**: 🟠 Medium | **Downtime**: None
+- **Prerequisite**: ACR Premium (#8)
+- **💰 Cost**: +$50/month per additional region — Source: Azure Retail Prices API
+- **Rollback**: ✅ Remove regional replica
+
 ### 16. NAT Gateway
 - **Risk**: 🟠 Medium | **Downtime**: ~1-5 min (outbound traffic)
 - **Blast Radius**: All workloads making external calls
@@ -136,6 +153,25 @@ These require Kubernetes manifest changes:
 ### 17. Restrict API server access
 - **Risk**: 🟠 Medium | **Downtime**: Potential loss of cluster access
 - **Pre-checks**: List ALL IPs that access the API server
+- **💰 Cost**: $0
+
+### 18. Key Vault via private link
+- **Risk**: 🟠 Medium | **Downtime**: Potential connectivity loss if misconfigured
+- **Blast Radius**: Workloads that mount secrets from Key Vault
+- **💰 Cost**: +$7/month _(private endpoint)_ — Source: Azure Retail Prices API
+- **Rollback**: ✅ Remove private endpoint / revert network rules
+
+### 19. ACR via private link
+- **Risk**: 🟠 Medium | **Downtime**: Potential connectivity loss if misconfigured
+- **Blast Radius**: All new pod starts / restarts (image pull)
+- **💰 Cost**: +$7/month _(private endpoint)_ — Source: Azure Retail Prices API
+- **Rollback**: ✅ Remove private endpoint / revert network rules
+
+### 20. ACR restrict network access
+- **Risk**: 🟠 Medium | **Downtime**: Potential connectivity loss if misconfigured
+- **Blast Radius**: Same as #19 — image pull may fail
+- **💰 Cost**: $0
+- **Rollback**: ✅ Revert network rules
 
 ### 21. Ddv5 VM series (latest generation)
 - **Risk**: 🟠 Medium | **Downtime**: Rolling ~5-10 min per node
@@ -160,7 +196,7 @@ These require Kubernetes manifest changes:
 ## 📈 Recommended Execution Order
 
 ```
-Phase 1 — Quick Wins (now, ~30 min total)
+Phase 1 — Quick Wins (now, ~30 min total) 💰 +~$17/month
 ├── 🟢 Diagnostic logs (AKS + Key Vault)
 ├── 🟢 Purge protection Key Vault
 ├── 🟢 AKS Cost Analysis
@@ -168,24 +204,24 @@ Phase 1 — Quick Wins (now, ~30 min total)
 ├── 🟢 VPA recommendation mode
 └── 🟢 AKS Backup
 
-Phase 2 — HA Improvements (next window, ~15 min)
+Phase 2 — HA Improvements (next window, ~15 min) 💰 +~$218/month
 ├── 🟡 Scale system pool to min 2 nodes ⭐ PRIORITY
 └── 🟢 ACR Premium upgrade (prerequisite for Phase 4)
 
-Phase 3 — Security Hardening (low traffic, test 1 workload at a time)
+Phase 3 — Security Hardening (low traffic, test 1 workload at a time) 💰 $0
 ├── 🟡 Disable API automount
 ├── 🟡 Read-only root filesystem (skip data store images)
 ├── 🟡 Trusted registries only
 └── 🟡 Non-root containers (skip data store images)
 
-Phase 4 — Network and Isolation (planned maintenance window)
+Phase 4 — Network and Isolation (planned maintenance window) 💰 +~$99/month
 ├── 🟠 NAT Gateway
 ├── 🟠 ACR Private Link + network restrictions
 ├── 🟠 Key Vault Private Link
 ├── 🟠 Restrict API server access
 └── 🟠 ACR Geo-replication
 
-Phase 5 — Heavy Infrastructure (change board + full test)
+Phase 5 — Heavy Infrastructure (change board + full test) 💰 -~$10/month
 ├── 🟠 Migrate to Ddv5 VM series
 └── 🔴 Ephemeral OS disk (last — highest risk)
 ```

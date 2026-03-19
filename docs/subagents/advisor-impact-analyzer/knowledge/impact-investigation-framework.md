@@ -56,6 +56,9 @@ kubectl get svc -n <ns>
 kubectl get pvc -n <ns>
 kubectl get pdb -n <ns> 2>/dev/null
 kubectl get statefulsets -n <ns> 2>/dev/null
+kubectl get daemonsets -n <ns> 2>/dev/null
+kubectl get hpa -n <ns> 2>/dev/null
+kubectl get ingress -n <ns> 2>/dev/null
 kubectl get networkpolicy -n <ns> 2>/dev/null
 
 # 3. Security posture per container
@@ -177,7 +180,9 @@ For every discovered workload, assign one of these roles:
 
 **Detection shortcuts for Kubernetes:**
 - `kubectl get svc -n <ns>` → type LoadBalancer/NodePort = likely customer-facing
+- `kubectl get ingress -n <ns>` → Ingress resources = customer-facing
 - StatefulSet or PVC attached = data store
+- DaemonSet = typically observability or networking agent
 - Image name contains db/cache/queue keywords = infrastructure component
 - No Service object = batch/job or sidecar
 
@@ -392,7 +397,7 @@ storage tier) almost NEVER affect running workloads. Impact is limited to:
 
 ---
 
-## Step 5b: Assess cost impact
+## Step 6: Assess cost impact
 
 For EVERY recommendation that changes a resource SKU, tier, size, count, or
 adds/removes a resource, investigate the cost delta.
@@ -569,9 +574,9 @@ USD pay-as-you-go rates and vary by region, EA discount, and reservations.
 
 ---
 
-## Step 6: Build the impact table
+## Step 7: Build the impact table
 
-After collecting real data (Steps 1-5), build the impact table:
+After collecting real data (Steps 1-6), build the impact table:
 
 ```markdown
 | Workload | Role | Replicas | Depends On | During Change | Auto-recovers? | End-user affected? |
@@ -604,7 +609,7 @@ workload is also affected.
 
 ---
 
-## Step 7: Identify cascade chains
+## Step 8: Identify cascade chains
 
 For each workload that BREAKS (❌):
 1. Who depends on this workload? (from Step 3)
@@ -623,7 +628,7 @@ Format:
 
 ---
 
-## Step 8: Handle incomplete information
+## Step 9: Handle incomplete information
 
 When you CANNOT fully discover the environment:
 

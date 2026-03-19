@@ -207,6 +207,21 @@ to confirm everything is working?
 | 🟠 **Medium Risk** | Downtime 1-15 min, no data loss | Schedule maintenance window |
 | 🔴 **High Risk** | Downtime >15 min, data risk, hard to reverse | Approval + window + tested rollback |
 
+## Limitations and Prerequisites
+
+### Prerequisites
+- Azure SRE Agent with the sub-agent configured (see Installation above)
+- **Reader** role on the subscription/resource group for Advisor recommendations
+- **AKS credentials** configured if analyzing Kubernetes workloads
+- **Cost Management Reader** role (optional — for actual spend data)
+
+### Limitations
+- The agent **analyzes** impact but does **not execute** recommendations automatically
+- Cost estimates are based on Azure Retail Prices API (pay-as-you-go rates); actual costs with EA/CSP agreements or reserved instances may differ
+- Subscription-level recommendations (not scoped to a resource group) are not analyzed
+- The agent cannot assess business logic impact — it maps infrastructure dependencies only. For business impact, delegate to a domain-specific sub-agent
+- When the SRE Agent delegates to this sub-agent, output may be summarized or truncated compared to Playground results
+
 ## Example Output
 
 The following is an example from an AKS e-commerce lab environment. Your output
@@ -246,4 +261,16 @@ Affected Workloads:
 | Current cost | After change | Monthly delta | Source |
 |-------------|-------------|--------------|--------|
 | $4.50/month (LRS 8Gi) | $9.00/month (ZRS 8Gi) | +$4.50/month | Azure Retail Prices API |
+
+⚡ CASCADE CHAIN
+Disk redundancy change (LRS → ZRS)
+  → database pod — offline during disk migration (~5-10 min)
+  → backend-api — cannot query database, returns 503
+  → web-frontend — checkout and data display fail
+  → End user: "page shows error" for ~5-10 minutes
+
+✅ POST-EXECUTION VALIDATION
+□ kubectl get pods -n <ns> — all pods Running and Ready
+□ kubectl exec <db-pod> -- <db-ping-command> — database responds
+□ End-to-end test: submit a request through web-frontend and verify it completes
 ```
