@@ -232,13 +232,26 @@ This disk is used by a database pod. Analyze the impact.
 # PaaS scenario (App Service environment)
 Advisor recommends upgrading my App Service plan from S1 to P1v3.
 Analyze the impact on my web apps and slot swaps.
+
+# PaaS scenario — database
+Advisor recommends changing my SQL Database from Basic DTU to
+Standard vCore. Analyze downtime, data risk, and cost impact.
+
+# PaaS scenario — Redis
+Advisor recommends upgrading Redis from Basic to Standard for
+replication. What data loss risk is there during migration?
+
+# PaaS scenario — full analysis
+Analyze all Advisor recommendations for my resource group.
+Note: this environment has no Kubernetes — only App Service,
+SQL Database, Redis, and Storage.
 ```
 
 ---
 
 ## Demo with the AKS Pet Store Lab
 
-If using the lab from this repository:
+If using the AKS lab from this repository:
 
 ```bash
 # Ensure the lab is deployed and healthy
@@ -250,6 +263,21 @@ kubectl get pods -n pets
 # To generate more Advisor recommendations, run high-cpu scenario:
 kubectl apply -f k8s/scenarios/high-cpu.yaml
 # Wait 30-60 minutes, then check Advisor
+```
+
+## Demo with a PaaS-only Environment
+
+If using the PaaS test environment:
+
+```bash
+# Deploy the PaaS test environment (~5-10 min)
+az deployment group create \
+  --resource-group <rg> \
+  --template-file infra/bicep/paas-test/main.bicep \
+  --parameters location=eastus2
+
+# Wait 24h for Advisor to generate recommendations, then use prompts
+# from the "Alternative Prompts — PaaS scenario" section above.
 ```
 
 ---

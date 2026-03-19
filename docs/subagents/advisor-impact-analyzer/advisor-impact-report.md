@@ -269,3 +269,27 @@ Phase 5 — Heavy Infrastructure (change board + full test) 💰 -~$10/month
 **The system node pool has only 1 node — this is a Single Point of Failure.**
 If this node fails, ALL workloads become unavailable. Recommendation #9
 (scale to 2 nodes) should be the **first action** after quick wins.
+
+---
+
+## 📝 Note on PaaS Environments
+
+This example report is from a **Kubernetes (AKS) environment**. In a
+**PaaS-only environment** (App Service, SQL, Redis, Storage), the report
+would look different:
+
+- **Discovered Environment** would list App Services, SQL Databases, Redis
+  Caches, and Storage Accounts instead of pods and services
+- **Dependency Graph** would come from App Insights KQL and connection
+  strings instead of environment variables
+- **Recommendations** would focus on App Service Plan resize, SQL tier
+  changes, Redis SKU upgrades, Storage redundancy — not container security
+  or node pool changes
+- **Workload Impact Table** would list App Service apps, Function Apps,
+  and databases instead of Kubernetes deployments
+
+To test with a PaaS environment, deploy the test template:
+```bash
+az deployment group create --resource-group <rg> \
+  --template-file infra/bicep/paas-test/main.bicep
+```

@@ -85,16 +85,54 @@ kubectl top nodes 2>/dev/null
 # List all resources in the resource group
 az resource list --resource-group <rg> -o table
 
-# Discover specific resource types
-az webapp list --resource-group <rg> -o table 2>/dev/null
-az functionapp list --resource-group <rg> -o table 2>/dev/null
-az vm list --resource-group <rg> -o table 2>/dev/null
-az sql server list --resource-group <rg> -o table 2>/dev/null
-az cosmosdb list --resource-group <rg> -o table 2>/dev/null
-az redis list --resource-group <rg> -o table 2>/dev/null
-az servicebus namespace list --resource-group <rg> -o table 2>/dev/null
-az eventhubs namespace list --resource-group <rg> -o table 2>/dev/null
-az storage account list --resource-group <rg> -o table 2>/dev/null
+# App Services — details with SKU, state, health, deployment slots
+az webapp list --resource-group <rg> \
+  --query "[].{name:name, state:state, kind:kind, defaultHostName:defaultHostName}" -o table 2>/dev/null
+# For each webapp, get operational details:
+az webapp show --name <app> --resource-group <rg> \
+  --query "{state:state, alwaysOn:siteConfig.alwaysOn, healthCheck:siteConfig.healthCheckPath, minTlsVersion:siteConfig.minTlsVersion, httpsOnly:httpsOnly, vnetIntegration:virtualNetworkSubnetId}" -o json 2>/dev/null
+# Deployment slots:
+az webapp deployment slot list --name <app> --resource-group <rg> -o table 2>/dev/null
+
+# App Service Plans — SKU, scaling
+az appservice plan list --resource-group <rg> \
+  --query "[].{name:name, sku:sku.name, tier:sku.tier, workers:sku.capacity, maxWorkers:maximumElasticWorkerCount}" -o table 2>/dev/null
+
+# Function Apps
+az functionapp list --resource-group <rg> \
+  --query "[].{name:name, state:state, kind:kind}" -o table 2>/dev/null
+
+# VMs
+az vm list --resource-group <rg> \
+  --query "[].{name:name, size:hardwareProfile.vmSize, os:storageProfile.osDisk.osType}" -o table 2>/dev/null
+
+# SQL Databases
+az sql server list --resource-group <rg> \
+  --query "[].{name:name, fqdn:fullyQualifiedDomainName}" -o table 2>/dev/null
+# For each server:
+# az sql db list --server <server> --resource-group <rg> \
+#   --query "[].{name:name, sku:currentSku.name, tier:currentSku.tier, maxSize:maxSizeBytes, zoneRedundant:zoneRedundant}" -o table
+
+# Cosmos DB
+az cosmosdb list --resource-group <rg> \
+  --query "[].{name:name, kind:kind, locations:locations[0].locationName}" -o table 2>/dev/null
+
+# Redis Cache
+az redis list --resource-group <rg> \
+  --query "[].{name:name, sku:sku.name, capacity:sku.capacity}" -o table 2>/dev/null
+
+# Storage Accounts
+az storage account list --resource-group <rg> \
+  --query "[].{name:name, sku:sku.name, kind:kind, accessTier:accessTier}" -o table 2>/dev/null
+
+# Service Bus / Event Hubs
+az servicebus namespace list --resource-group <rg> \
+  --query "[].{name:name, sku:sku.name}" -o table 2>/dev/null
+az eventhubs namespace list --resource-group <rg> \
+  --query "[].{name:name, sku:sku.name}" -o table 2>/dev/null
+
+# Networking
+az network private-endpoint list --resource-group <rg> -o table 2>/dev/null
 ```
 
 ### For partially observable environments (Profile D)
@@ -471,6 +509,109 @@ storage tier) almost NEVER affect running workloads. Impact is limited to:
 - Workloads that RESTART during the operation (rare)
 - If a supporting resource becomes unreachable due to network changes (private link
   misconfiguration) → cascading failure
+
+---
+
+### PaaS COMPUTE / SCALING recommendations
+
+#### App Service Plan resize (scale up: S1 → P1v3, etc.)
+
+**Investigation:**
+```bash
+# Current plan SKU and capacity
+az appservice plan show --name <plan> --resource-group <rg> \
+  --query "{sku:sku.name, tier:sku.tier, capacity:sku.capacity, kind:kind}" -o json
+
+# Apps on this plan (all affected by plan change)
+az webapp list --resource-group <rg> \
+  --query "[?appServicePlanId.contains(@, '<plan>')].{name:name, state:state}" -o table
+
+# Check if apps have deployment slots (slot swap = zero-downtime alternative)
+az webapp deployment slot list --name <app> --resource-group <rg> -o table 2>/dev/null
+```
+
+**Decision rules:**
+- Scale up (change SKU): brief restart ~30s per instance, app recovers automatically
+- Scale out (add instances): always safe, no restart needed
+- If app has deployment slots: use slot swap for zero-downtime transitions
+- Multiple apps on the same plan: ALL are affected by SKU change
+- Check if any app has always-on: downgrading may disable always-on (cold starts)
+
+---
+
+#### SQL Database tier change (DTU → vCore, Basic → Standard, etc.)
+
+**Investigation:**
+```bash
+# Current tier and configuration
+az sql db show --name <db> --server <server> --resource-group <rg> \
+  --query "{sku:currentSku.name, tier:currentSku.tier, maxSize:maxSizeBytes, zoneRedundant:zoneRedundant, status:status}" -o json
+
+# Active connections (impact assessment)
+az sql db show-connection-string --server <server> --name <db> --client ado.net -o tsv 2>/dev/null
+```
+
+**Decision rules:**
+- DTU ↔ vCore migration: brief connectivity interruption ~30s, data is safe
+- Tier upgrade (Basic → Standard): usually online, brief pause possible
+- Tier downgrade: verify current data size fits in target tier maxSize
+- Zone-redundant → non-zone-redundant: availability degradation
+- All apps with connection strings to this DB are affected during transition
+
+---
+
+#### Redis Cache SKU change (Basic → Standard → Premium)
+
+**Investigation:**
+```bash
+# Current configuration
+az redis show --name <redis> --resource-group <rg> \
+  --query "{sku:sku.name, capacity:sku.capacity, port:port, sslPort:sslPort, replicasPerPrimary:replicasPerPrimary, enableNonSslPort:enableNonSslPort}" -o json
+```
+
+**Decision rules:**
+- Basic → Standard/Premium: requires creating NEW instance + data migration
+- 🟠 Medium Risk: data in cache will be LOST during migration (unless export/import)
+- Standard → Premium (same family): can be done online
+- All apps connecting to this Redis are affected during DNS cutover
+- Check if app uses Redis for sessions/state: data loss = user sessions lost
+
+---
+
+#### Storage Account redundancy change (LRS → ZRS/GRS)
+
+**Investigation:**
+```bash
+az storage account show --name <sa> --resource-group <rg> \
+  --query "{sku:sku.name, kind:kind, accessTier:accessTier}" -o json
+```
+
+**Decision rules:**
+- LRS → ZRS: live migration available for most account types (no downtime)
+- LRS → GRS/RA-GRS: online operation, no downtime
+- ZRS → LRS: requires manual data copy (downtime)
+- Check what uses this storage: blobs, file shares, table storage
+- Blob containers mounted by apps: may see brief latency during transition
+
+---
+
+#### Function App plan change (Consumption → Premium / Dedicated)
+
+**Investigation:**
+```bash
+az functionapp show --name <func> --resource-group <rg> \
+  --query "{state:state, kind:kind, planId:appServicePlanId}" -o json
+
+# Check existing functions and triggers
+az functionapp function list --name <func> --resource-group <rg> -o table 2>/dev/null
+```
+
+**Decision rules:**
+- Consumption → Premium: brief cold start during transition, then warm instances
+- Premium → Consumption: lose VNet integration, always-ready instances, larger payload support
+- Dedicated → Consumption: lose long-running execution (>10 min), VNet features
+- Functions with timer triggers: may miss one execution during transition
+- Functions with Service Bus/Event Hub triggers: messages buffer, no loss
 
 ---
 
