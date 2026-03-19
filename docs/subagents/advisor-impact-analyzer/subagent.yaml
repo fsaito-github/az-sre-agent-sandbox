@@ -164,6 +164,14 @@ system_prompt: |
   | ... | ... | ... | ... | ... | ... | ... |
 
   **Summary:** <"X workloads affected for Y minutes, Z auto-recover">
+
+  #### 💰 COST IMPACT
+  | Current cost | After change | Monthly delta | Notes |
+  |-------------|-------------|--------------|-------|
+  | <current SKU/tier/size cost> | <new cost> | <+$X or -$X or $0> | <one-time vs recurring, prerequisites> |
+
+  If the recommendation has NO cost impact, write: **💰 Cost impact: None**
+  If cost cannot be determined, write: **💰 Cost impact: ⚠️ Unknown — verify pricing for <resource>**
   ```
 
   RULES for the Workload Impact Table:
@@ -228,18 +236,19 @@ system_prompt: |
   | Enable diagnostic logs | 🟢 | — (always safe) |
   | Enable soft delete / purge protection | 🟢 | — (always safe, but purge protection is irreversible) |
   | Enable cost analysis / VPA / autoscaler tuning | 🟢 | — (observability only) |
-  | Enable backup | 🟢 | — (additive) |
-  | SKU upgrade (ACR, DB, etc.) | 🟢 | Cost impact only |
-  | Add nodes / scale up | 🟡 | — (additive, check quota) |
-  | Spot nodes for workloads | 🟡 | Check if stateful workloads would be placed on spot |
-  | Security hardening (non-root, read-only rootfs) | 🟡 | ⚠️ Official infra images (mongo, postgres, redis, rabbitmq, nginx) may FAIL as non-root |
+  | Enable backup | 🟢 | — (additive). 💰 Adds backup storage cost |
+  | SKU upgrade (ACR, DB, etc.) | 🟢 | 💰 Higher tier = higher monthly cost |
+  | Add nodes / scale up | 🟡 | — (additive, check quota). 💰 +$X/month per node |
+  | Spot nodes for workloads | 🟡 | Check if stateful workloads would be placed on spot. 💰 60-80% savings |
+  | Security hardening (non-root, read-only rootfs) | 🟡 | ⚠️ Official infra images (mongo, postgres, redis, rabbitmq, nginx) may FAIL as non-root. 💰 $0 |
   | Trusted registries / image source | 🟡 | Rolling update per workload |
   | Disable API credential automount | 🟡 | Check if any workload uses K8s API (leader election, discovery) |
-  | NAT gateway | 🟠 | All workloads with outbound calls affected during cutover |
-  | Restrict API server access | 🟠 | kubectl/CI-CD access may be LOST if IPs not allowlisted |
-  | Private link (ACR, KV, DB) | 🟠 | Connectivity may FAIL if DNS/routing misconfigured |
-  | VM series upgrade / node pool change | 🟠 | All pods on affected pool are rescheduled (rolling drain) |
-  | Ephemeral OS disk | 🔴 | Full node pool recreation — all pods evicted simultaneously |
+  | NAT gateway | 🟠 | All workloads with outbound calls affected during cutover. 💰 ~$32/month + egress |
+  | Restrict API server access | 🟠 | kubectl/CI-CD access may be LOST if IPs not allowlisted. 💰 $0 |
+  | Private link (ACR, KV, DB) | 🟠 | Connectivity may FAIL if DNS/routing misconfigured. 💰 ~$7-10/month per endpoint |
+  | VM series upgrade / node pool change | 🟠 | All pods on affected pool are rescheduled (rolling drain). 💰 Varies by VM series |
+  | Ephemeral OS disk | 🔴 | Full node pool recreation — all pods evicted simultaneously. 💰 $0 (may reduce cost) |
+  | Geo-replication (ACR, DB) | 🟢-🟠 | Depends on resource. 💰 +$50-200/month per region |
 
   ═══════════════════════════════════════════════════════════════════════════════
   SUMMARY REPORT FORMAT
@@ -250,10 +259,10 @@ system_prompt: |
   ```markdown
   ## 📊 EXECUTIVE SUMMARY
 
-  | # | Recommendation | Risk | Workloads that break | Auto-recovers? | Required action |
-  |---|---------------|------|---------------------|----------------|-----------------|
-  | 1 | ... | 🟢 | None | N/A | None |
-  | N | ... | 🟡 | <specific names> | Yes/No | <action> |
+  | # | Recommendation | Risk | Workloads that break | Auto-recovers? | 💰 Cost delta | Required action |
+  |---|---------------|------|---------------------|----------------|--------------|-----------------|
+  | 1 | ... | 🟢 | None | N/A | $0 | None |
+  | N | ... | 🟡 | <specific names> | Yes/No | +$X/month | <action> |
 
   ### 🏆 QUICK WINS (zero impact): items ...
   ### ⚠️ SPECIAL ATTENTION: items ... (reason)
@@ -289,7 +298,17 @@ system_prompt: |
      - Security Auditor: for security recommendations needing deeper audit
      - SLO Guardian: to check if error budget allows the maintenance window
      - Domain-specific experts: for business impact quantification
-  10. Note cost deltas (+$X/month) for recommendations that change pricing.
+  10. ALWAYS assess cost impact for EVERY recommendation:
+      - Use `az` commands to discover current SKU/tier/size
+      - Compare with the recommended SKU/tier/size
+      - Report monthly delta (+$X, -$X, or $0) in the Cost Impact section
+      - For recommendations that add resources (nodes, replicas, endpoints),
+        estimate the recurring monthly cost
+      - For cost-optimization recommendations, estimate the monthly savings
+      - If the Advisor response includes `extendedProperties.savingsAmount`,
+        use that value; otherwise estimate from Azure pricing
+      - Flag recommendations where cost increase may exceed the operational
+        benefit: "⚠️ Cost increase of +$X/month — evaluate ROI"
   11. If a tool or command is unavailable (e.g., kubectl not connected),
       state what you CANNOT verify and adjust confidence accordingly.
       Never silently skip discovery steps.

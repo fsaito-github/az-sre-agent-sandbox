@@ -392,6 +392,90 @@ storage tier) almost NEVER affect running workloads. Impact is limited to:
 
 ---
 
+## Step 5b: Assess cost impact
+
+For EVERY recommendation that changes a resource SKU, tier, size, count, or
+adds/removes a resource, investigate the cost delta.
+
+### Discover current pricing tier
+```bash
+# AKS node pools — current VM size and count
+az aks nodepool list --resource-group <rg> --cluster-name <aks> \
+  --query "[].{name:name, vmSize:vmSize, count:count, minCount:minCount, maxCount:maxCount}" -o table
+
+# ACR — current SKU
+az acr show --name <acr> --query "sku.name" -o tsv 2>/dev/null
+
+# App Service — current plan and SKU
+az appservice plan list --resource-group <rg> \
+  --query "[].{name:name, sku:sku.name, tier:sku.tier, workers:sku.capacity}" -o table 2>/dev/null
+
+# SQL Database — current tier
+az sql db list --resource-group <rg> --server <server> \
+  --query "[].{name:name, sku:currentSku.name, tier:currentSku.tier}" -o table 2>/dev/null
+
+# Cosmos DB — current throughput model
+az cosmosdb show --name <cosmos> --resource-group <rg> \
+  --query "{offerType:databaseAccountOfferType}" -o json 2>/dev/null
+
+# Redis — current SKU
+az redis show --name <redis> --resource-group <rg> \
+  --query "{sku:sku.name, family:sku.family, capacity:sku.capacity}" -o json 2>/dev/null
+
+# Private endpoints — count (each costs ~$7-10/month)
+az network private-endpoint list --resource-group <rg> --query "length(@)" -o tsv 2>/dev/null
+
+# NAT Gateway — check if exists
+az network nat gateway list --resource-group <rg> -o table 2>/dev/null
+```
+
+### Use Advisor's own cost data when available
+```bash
+# Some Advisor recommendations include savings estimates in extendedProperties
+az advisor recommendation list --resource-group <rg> -o json \
+  | python3 -c "
+import json, sys
+recs = json.load(sys.stdin)
+for r in recs:
+    ext = r.get('extendedProperties', {})
+    savings = ext.get('savingsAmount', ext.get('annualSavingsAmount', ''))
+    currency = ext.get('savingsCurrency', 'USD')
+    name = r.get('shortDescription', {}).get('problem', 'unknown')
+    if savings:
+        print(f'💰 {name}: saves {currency} {savings}')
+    else:
+        print(f'   {name}: no savings data from Advisor')
+"
+```
+
+### Common cost reference points
+Use these as rough estimates when exact pricing is not available:
+
+| Change | Approximate monthly cost delta |
+|--------|-------------------------------|
+| Add 1x Standard_D2s_v3 node | +$70-90 |
+| Add 1x Standard_D4s_v3 node | +$140-180 |
+| ACR Basic → Standard | +$15-20 |
+| ACR Basic → Premium | +$140-160 |
+| ACR Geo-replication (per region) | +$50-80 |
+| NAT Gateway (base + processing) | +$32-45 |
+| Private endpoint (per endpoint) | +$7-10 |
+| Azure Backup for AKS (per PV) | +$5-15 |
+| VPA / Cost Analysis addon | $0 (free) |
+| Diagnostic logs (to Log Analytics) | +$2-10 (depends on volume) |
+| Spot nodes vs regular | -60% to -80% savings |
+| Move to newer VM series (D→Dv5) | Typically ±0 to -10% |
+| Ephemeral OS disk | $0 to slight savings |
+
+**Rules:**
+- Always show cost delta in the per-recommendation output
+- If a recommendation SAVES money, highlight it: "💰 Saves ~$X/month"
+- If a recommendation COSTS more, flag it: "💰 Adds ~$X/month"
+- If the cost increase is significant (>$100/month), add: "⚠️ Evaluate ROI before applying"
+- Group savings vs costs in the executive summary
+
+---
+
 ## Step 6: Build the impact table
 
 After collecting real data (Steps 1-5), build the impact table:
