@@ -72,10 +72,14 @@ whether it's **safe to execute now** nor produce an operational plan.
    | Portal Field | Value from subagent.yaml |
    |-------------|------------------------|
    | **Name** | `Advisor Impact Analyzer` |
-   | **Instructions** | Copy the `system_prompt` content |
-   | **Handoff Description** | Copy the `handoff_description` content |
+   | **Instructions** | Copy the full `system_prompt` content |
    | **Built-in Tools** | Select: Azure CLI, Log Analytics/Kusto query, Python code execution |
    | **Agent Type** | `Review` |
+
+   > **Note:** If the portal shows a **Handoff Description** field, copy the
+   > `handoff_description` content from subagent.yaml. If this field is not
+   > visible in your portal version, the orchestrator will use the Instructions
+   > to determine when to delegate to this subagent.
 
 5. Enable **Knowledge base** (see step 2 below)
 6. Click **Save**
