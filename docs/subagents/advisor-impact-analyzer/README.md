@@ -69,17 +69,17 @@ whether it's **safe to execute now** nor produce an operational plan.
 3. Click **Create** → select **Subagent**
 4. Fill in the fields using the values from [`subagent.yaml`](subagent.yaml):
 
-   | Portal Field | Value from subagent.yaml |
-   |-------------|------------------------|
+   | Portal Field | What to configure |
+   |-------------|------------------|
    | **Name** | `Advisor Impact Analyzer` |
-   | **Instructions** | Copy the full `system_prompt` content |
-   | **Built-in Tools** | Select: Azure CLI, Log Analytics/Kusto query, Python code execution |
-   | **Agent Type** | `Review` |
+   | **Instructions** | Copy the full `system_prompt` content from subagent.yaml |
+   | **Tools** | Select: Azure CLI, Log Analytics/Kusto query, Python code execution |
+   | **Skills** | Leave empty (the subagent uses tools + knowledge base, not skills) |
+   | **Hooks** | Leave empty (no automation triggers needed for on-demand analysis) |
 
-   > **Note:** If the portal shows a **Handoff Description** field, copy the
-   > `handoff_description` content from subagent.yaml. If this field is not
-   > visible in your portal version, the orchestrator will use the Instructions
-   > to determine when to delegate to this subagent.
+   > **Note:** The `handoff_description` from subagent.yaml is not a separate
+   > portal field. The orchestrator uses the Instructions text to determine
+   > when to delegate to this subagent.
 
 5. Enable **Knowledge base** (see step 2 below)
 6. Click **Save**
