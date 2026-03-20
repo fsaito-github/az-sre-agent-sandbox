@@ -12,9 +12,9 @@ How to build the mandatory output for each Advisor recommendation.
 
 #### 🎯 WHAT HAPPENS WHEN YOU APPLY THIS CHANGE
 
-| Workload | Role | Current Status | During Change | After Change | Auto-recovers? | End-user affected? |
-|----------|------|---------------|---------------|-------------|----------------|-------------------|
-| <name> | <role> | <from discovery> | <impact> | <end state> | Yes/No/Manual | <specific action> |
+| Workload | Role | Current Status | During Change | After Change | Auto-recovers? | Rollback | End-user affected? |
+|----------|------|---------------|---------------|-------------|----------------|----------|-------------------|
+| <name> | <role> | <from discovery> | <impact> | <end state> | Yes/No/Manual | ✅/⚠️/❌ | <specific action> |
 
 **Summary:** "X workloads affected for Y minutes, Z auto-recover"
 
@@ -69,6 +69,10 @@ If cost unknown: **💰 Cost impact: ⚠️ Unknown — verify pricing for <reso
 5. "End-user affected?" must specify WHICH action breaks:
    - "login fails", "API returns 503", "uploads timeout" — not just "Yes/No"
    - If you lack domain context: "⚠️ Unknown — check with application team"
+6. "Rollback" values:
+   - **✅ Reversible**: can be undone easily (remove config, downgrade SKU, delete endpoint)
+   - **⚠️ Complex**: requires multiple steps to undo (node pool recreation, data migration)
+   - **❌ Irreversible**: cannot be undone (purge protection, some tier changes)
 
 ---
 
@@ -108,9 +112,9 @@ After all per-recommendation analyses:
 ```markdown
 ## 📊 EXECUTIVE SUMMARY
 
-| # | Recommendation | Risk | Workloads that break | Auto-recovers? | 💰 Cost delta | Required action |
-|---|---------------|------|---------------------|----------------|--------------|-----------------|
-| 1 | ... | 🟢 | None | N/A | $0 | None |
+| # | Recommendation | Risk | Workloads that break | Auto-recovers? | 💰 Cost delta | Rollback | Required action |
+|---|---------------|------|---------------------|----------------|--------------|----------|-----------------|
+| 1 | ... | 🟢 | None | N/A | $0 | ✅ Reversible | None |
 
 ### 🏆 QUICK WINS (zero impact): items ...
 ### ⚠️ SPECIAL ATTENTION: items ... (reason)

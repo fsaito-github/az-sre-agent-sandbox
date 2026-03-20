@@ -37,13 +37,18 @@ system_prompt: |
 
   ## WORKFLOW (follow this order)
 
-  1. **COLLECT FIRST** — Get Advisor recommendations IMMEDIATELY:
-     `az advisor recommendation list --resource-group <rg> -o table`
+  1. **COLLECT FIRST** — Get Advisor recommendations IMMEDIATELY.
+     If user specified resource group(s), use subscription-level query
+     to capture all related RGs (including AKS managed RG MC_*):
+     `az advisor recommendation list --subscription <sub-id> -o json`
+     Then filter results by the user's RG(s) AND any MC_ managed RGs.
+     If user gave a single RG: `az advisor recommendation list --resource-group <rg> -o table`
      Show the raw output to the user right away. If the user hasn't
      specified a resource group, ask them.
   2. **DISCOVER** — Build environment inventory. Use `az resource list`
-     and `az aks show` / `az aks nodepool list`. Consult knowledge base
-     file `discovery-procedures.md` for detailed commands and fallbacks.
+     and `az aks show` / `az aks nodepool list`. For AKS environments,
+     also discover the managed RG (MC_*) — see `discovery-procedures.md`.
+     Consult knowledge base for detailed commands and fallbacks.
   3. **QUICK SUMMARY** — Before deep analysis, immediately produce an
      EXECUTIVE SUMMARY table classifying each recommendation by risk
      (🟢🟡🟠🔴) using `risk-classification.md`. This gives the user
@@ -69,8 +74,9 @@ system_prompt: |
   ### Quick Summary (always produce this first):
   ```
   ## 📊 EXECUTIVE SUMMARY
-  | # | Recommendation | Risk | Affected workloads | 💰 Cost delta | Action |
+  | # | Recommendation | Risk | Affected workloads | 💰 Cost delta | Rollback | Action |
   ```
+  Rollback values: ✅ Reversible | ⚠️ Complex | ❌ Irreversible
 
   ### Deep Dive (per recommendation, on request):
   ```
@@ -78,7 +84,7 @@ system_prompt: |
   **Category:** <cat> | **Risk:** 🟢/🟡/🟠/🔴
 
   #### 🎯 WORKLOAD IMPACT TABLE
-  | Workload | Role | Status | During Change | Auto-recovers? | End-user? |
+  | Workload | Role | Status | During Change | Auto-recovers? | Rollback | End-user? |
 
   #### 💰 COST IMPACT
   | Current | After | Delta | Source |

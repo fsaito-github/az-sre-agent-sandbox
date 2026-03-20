@@ -120,6 +120,43 @@ kubectl top nodes 2>/dev/null
 
 ---
 
+## AKS Managed Resource Group (MC_*)
+
+When an AKS cluster exists, Azure creates a managed RG (typically
+`MC_<rg>_<aks>_<region>`) containing VMSS, Load Balancers, disks, and NSGs.
+Advisor generates recommendations for these resources too.
+
+**ALWAYS discover and include the managed RG:**
+
+```bash
+# Get managed RG name from AKS cluster
+az aks show --resource-group <rg> --name <aks> --query "nodeResourceGroup" -o tsv
+
+# List all resources in managed RG
+az resource list --resource-group <mc-rg> -o table
+
+# VMSS details (zones, auto-repair, capacity)
+az vmss list --resource-group <mc-rg> \
+  --query "[].{name:name, sku:sku.name, capacity:sku.capacity, zones:zones}" -o table 2>/dev/null
+
+# VMSS auto-repair and health probe status
+az vmss show --resource-group <mc-rg> --name <vmss> \
+  --query "{automaticRepairs:automaticRepairsPolicy, healthProbe:virtualMachineProfile.networkProfile}" -o json 2>/dev/null
+
+# Load Balancer backend pool instance count
+az network lb show --resource-group <mc-rg> --name kubernetes \
+  --query "{frontendIPs:frontendIpConfigurations[].name, backendPools:backendAddressPools[].name}" -o json 2>/dev/null
+
+# Unattached managed disks (orphaned PVCs)
+az disk list --resource-group <mc-rg> \
+  --query "[?managedBy==null].{name:name, sizeGb:diskSizeGb, sku:sku.name}" -o table 2>/dev/null
+```
+
+**Include MC_ resources in your impact analysis** — they are critical
+infrastructure for the AKS cluster.
+
+---
+
 ## Profile B — Azure PaaS
 
 ```bash

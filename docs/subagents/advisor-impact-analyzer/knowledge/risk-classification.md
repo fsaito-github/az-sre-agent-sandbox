@@ -31,7 +31,7 @@ Use as a STARTING POINT, then adjust based on discovered environment.
 | Recommendation | Baseline | Notes |
 |---------------|----------|-------|
 | Enable diagnostic logs | 🟢 | Always safe |
-| Enable soft delete / purge protection | 🟢 | Safe, but purge protection is irreversible |
+| Enable soft delete / purge protection | 🟢 | Safe, but purge protection is ❌ irreversible |
 | Enable cost analysis / VPA / autoscaler tuning | 🟢 | Observability only |
 | Enable backup | 🟢 | Additive. 💰 Adds backup storage cost |
 | SKU upgrade (ACR, DB, etc.) | 🟢 | 💰 Higher tier = higher cost |
@@ -46,6 +46,17 @@ Use as a STARTING POINT, then adjust based on discovered environment.
 | VM series upgrade / node pool change | 🟠 | Rolling drain. 💰 Varies |
 | Ephemeral OS disk | 🔴 | Full recreation. 💰 $0 or savings |
 | Geo-replication | 🟢-🟠 | Depends on resource. 💰 +$50-200/mo per region |
+
+### AKS Managed RG (MC_*) — VMSS, Load Balancer, Disks
+
+| Recommendation | Baseline | Notes |
+|---------------|----------|-------|
+| VMSS enable automatic repair policy | 🟡 | No downtime, additive. Requires health probe. 💰 $0 |
+| VMSS zone-balanced configuration | 🟠 | Requires node pool recreation with `--zones`. All pods rescheduled. 💰 $0 |
+| VMSS enable health monitoring | 🟢 | Additive, no downtime. 💰 $0 |
+| VMSS encryption at host | 🟠 | Requires node pool recreation with `--enable-encryption-at-host`. 💰 $0 |
+| LB backend pool ≥2 instances | 🟡 | Scale node pool to 2+. 💰 +$X/mo per node |
+| Unattached managed disk (orphaned PVC) | 🟢 | Verify PVC is orphaned, then delete. 💰 Saves ~$1-4/mo per disk |
 
 ### PaaS
 
