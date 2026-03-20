@@ -49,12 +49,13 @@ Namespace: `pets` · RabbitMQ creds: `guest/guest` · MongoDB: no auth
 
 ## Installation
 
-1. Open the **Azure SRE Agent** in the Azure portal.
-2. Navigate to **Settings → Subagents → + Create subagent**.
-3. Paste the full contents of [`subagent.yaml`](subagent.yaml) into the
-   Subagent Builder.
-4. Click **Save**. The agent appears in the subagent list as
-   **E-Commerce Domain Expert**.
+1. Open your SRE Agent in the [Azure Portal](https://aka.ms/sreagent/portal)
+2. Go to the **Subagent builder** tab
+3. Click **Create** → select **Subagent**
+4. Fill in the portal fields (Name, Instructions, Handoff Description, Tools, Agent Type) using the values from [`subagent.yaml`](subagent.yaml)
+5. Click **Save**
+6. Test in the **Test playground** (view toggle in the Subagent builder)
+7. To invoke in chat, type `/agent` and select **E-Commerce Domain Expert**
 
 No additional infrastructure or secrets are required — the agent uses the same
 tools (Azure CLI, kubectl, Kusto, Python) already available to the SRE Agent.
@@ -164,6 +165,6 @@ about _what matters most_.
 
 | File | Purpose |
 |---|---|
-| `subagent.yaml` | Subagent configuration — paste into the Subagent Builder |
+| `subagent.yaml` | Field values for the Subagent builder portal |
 | `README.md` | This documentation |
 | `demo-flow.md` | Step-by-step demo script for live walkthroughs |

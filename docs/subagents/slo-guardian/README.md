@@ -35,19 +35,19 @@ The SLO Guardian **complements** the SRE Agent by adding a **proactive, SLO-driv
 
 ## Installation
 
-1. Open the **Azure SRE Agent** portal.
-2. Navigate to **Settings → Subagent Builder**.
-3. Click **+ New Sub-agent**.
-4. Paste the entire contents of [`subagent.yaml`](./subagent.yaml) into the configuration editor.
-5. Click **Save & Activate**.
-
-The SLO Guardian now appears as an available sub-agent in the Agent Playground and will be automatically invoked when the SRE Agent determines that an SLO-related question has been asked.
+1. Open your SRE Agent in the [Azure Portal](https://aka.ms/sreagent/portal)
+2. Go to the **Subagent builder** tab
+3. Click **Create** → select **Subagent**
+4. Fill in the portal fields (Name, Instructions, Handoff Description, Tools, Agent Type) using the values from [`subagent.yaml`](./subagent.yaml)
+5. Click **Save**
+6. Test in the **Test playground** (view toggle in the Subagent builder)
+7. To invoke in chat, type `/agent` and select **SLO Guardian**
 
 ---
 
-## Test Prompts for the Playground
+## Test Prompts
 
-Copy-paste these into the Azure SRE Agent Playground to exercise the SLO Guardian:
+Use these prompts in the Test playground or in chat via `/agent SLO Guardian`:
 
 ### Basic SLO Report
 

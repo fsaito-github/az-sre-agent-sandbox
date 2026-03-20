@@ -179,5 +179,5 @@ Look back [TIME RANGE]. Include all KQL data and action items.
 |---|---|
 | PIR has "Insufficient data" in sections | Wait longer after breaking the scenario (≥2 min) so events are ingested into Log Analytics |
 | KQL queries return empty results | Verify the Log Analytics workspace is connected to the AKS cluster; check `ContainerInsights` solution is enabled |
-| PIR Generator not available as handoff | Re-check that `subagent.yaml` was pasted correctly in the Subagent Builder and saved |
+| PIR Generator not available as handoff | Re-check that the subagent was created correctly in the Subagent builder and saved |
 | Timeline timestamps look wrong | Ensure your KQL time range covers the incident window; use explicit time range in the prompt |

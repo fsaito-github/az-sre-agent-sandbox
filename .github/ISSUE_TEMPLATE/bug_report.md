@@ -25,7 +25,7 @@ A clear description of what the bug is.
 ## To reproduce
 
 Steps to reproduce the behavior:
-1. Open SRE Agent portal / Playground
+1. Open SRE Agent portal / Test playground
 2. Use prompt: '...'
 3. See error / unexpected output
 

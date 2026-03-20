@@ -1,12 +1,8 @@
 ##############################################################################
 # SLO Guardian — Azure SRE Agent Sub-agent
 #
-# Paste this YAML into the Azure SRE Agent → Subagent Builder to register
-# the SLO Guardian as a custom sub-agent.
-#
-# Lab context: AKS Pet Store demo (namespace: pets)
-#   store-front · order-service · product-service · makeline-service
-#   MongoDB · RabbitMQ · virtual-customer (load generator)
+# Use the values below to fill in the Subagent builder fields in the
+# Azure SRE Agent portal. See README.md for installation instructions.
 ##############################################################################
 
 name: SLO Guardian

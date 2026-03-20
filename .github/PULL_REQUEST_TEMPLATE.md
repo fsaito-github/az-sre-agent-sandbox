@@ -21,7 +21,7 @@ Brief description of what this PR does.
 
 ## Checklist
 
-- [ ] I have tested the changes in the SRE Agent Playground
+- [ ] I have tested the changes in the SRE Agent Test playground
 - [ ] I have updated the relevant documentation (README, demo-flow, etc.)
 - [ ] My changes follow the [Conventional Commits](https://www.conventionalcommits.org/) convention
 - [ ] I have checked that YAML files are valid
@@ -31,7 +31,7 @@ Brief description of what this PR does.
 ## Testing
 
 Describe how you tested the changes:
-- [ ] Playground test with prompt: `...`
+- [ ] Test playground test with prompt: `...`
 - [ ] Validated YAML syntax
 - [ ] Verified markdown formatting
 - [ ] Tested in live SRE Agent (via delegation)

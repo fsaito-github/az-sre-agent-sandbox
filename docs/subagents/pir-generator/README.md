@@ -26,13 +26,15 @@ The intended workflow is: **Diagnose → Fix → PIR**.
 
 ## Installation
 
-1. Open the **Azure SRE Agent** in your Azure AI Foundry project.
-2. Navigate to **Subagent Builder** (or the sub-agent configuration panel).
-3. Click **Add Subagent** → **From YAML**.
-4. Paste the entire contents of [`subagent.yaml`](./subagent.yaml).
-5. Save. The PIR Generator now appears as a handoff target.
+1. Open your SRE Agent in the [Azure Portal](https://aka.ms/sreagent/portal)
+2. Go to the **Subagent builder** tab
+3. Click **Create** → select **Subagent**
+4. Fill in the portal fields (Name, Instructions, Handoff Description, Tools, Agent Type) using the values from [`subagent.yaml`](./subagent.yaml)
+5. Click **Save**
+6. Test in the **Test playground** (view toggle in the Subagent builder)
+7. To invoke in chat, type `/agent` and select **PIR Generator**
 
-> **Prerequisites:** The SRE Agent must already have access to the AKS cluster and its Log Analytics workspace. The PIR Generator reuses the same `execute_kusto_query`, `ExecuteKubectlCommand`, and `ExecutePythonCode` tools.
+> **Prerequisites:** The SRE Agent must already have access to the AKS cluster and its Log Analytics workspace.
 
 ---
 

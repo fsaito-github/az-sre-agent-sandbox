@@ -28,18 +28,16 @@ The core SRE Agent is excellent at answering "why is this pod crashing?" but it 
 
 ## Installation
 
-1. Open the **Azure SRE Agent** in your Azure portal.
-2. Navigate to **Subagent Builder** → **Create New Subagent**.
-3. Copy the entire contents of [`subagent.yaml`](subagent.yaml) and paste it into the builder.
-4. Save and activate the sub-agent.
+1. Open your SRE Agent in the [Azure Portal](https://aka.ms/sreagent/portal)
+2. Go to the **Subagent builder** tab
+3. Click **Create** → select **Subagent**
+4. Fill in the portal fields (Name, Instructions, Handoff Description, Tools, Agent Type) using the values from [`subagent.yaml`](subagent.yaml)
+5. For **Built-in Tools**, select: Azure CLI, Log Analytics/Kusto query, Python code execution
+6. Click **Save**
+7. Test in the **Test playground** (view toggle in the Subagent builder)
+8. To invoke in chat, type `/agent` and select **Security Posture Auditor**
 
-The sub-agent uses these tools (all built into the SRE Agent platform):
-- `ExecuteKubectlCommand` — run kubectl against the connected cluster
-- `ExecutePythonCode` — parse JSON output and perform analysis
-- `azure_cli` — query AKS-level configuration
-- `execute_kusto_query` — query Azure Monitor / Log Analytics
-
-No additional permissions or tools are required beyond what the SRE Agent already has.
+No additional permissions are required beyond what the SRE Agent already has.
 
 ## Test Prompts
 

@@ -64,7 +64,7 @@ docs/subagents/
 │       ├── paas-recommendations.md
 │       └── impact-table-guide.md
 ├── slo-guardian/
-│   ├── subagent.yaml           # Paste into Subagent Builder
+│   ├── subagent.yaml           # Field values for Subagent builder
 │   ├── README.md               # Documentation & test prompts
 │   └── demo-flow.md            # Step-by-step demo script
 ├── ecommerce-expert/
