@@ -27,13 +27,14 @@ sub-agents for Azure SRE Agent and a demo lab environment.
 Since subagents run inside the Azure SRE Agent platform, testing requires:
 
 1. Open your SRE Agent in the [Azure Portal](https://aka.ms/sreagent/portal)
-2. Go to **Builder** → **Subagent Builder**
-3. Paste the updated `subagent.yaml` content
-4. Test in the **Playground** with the prompts from the subagent's README
-5. If updating a knowledge file, re-upload it to **Builder** → **Knowledge Base**
+2. Go to the **Subagent builder** tab and select your subagent
+3. Update the portal fields (Instructions, Handoff Description, Tools) with the new values from `subagent.yaml`
+4. Test in the **Test playground** (view toggle in the Subagent builder) with the prompts from the subagent's README
+5. If updating a knowledge file, re-upload it via **Settings** → **Knowledge Base** → **Files**
 
-> **Tip:** Test in Playground first. Playground gives the sub-agent's direct
-> output, while the main SRE Agent may summarize or truncate responses.
+> **Tip:** Test in the Test playground first. The playground gives the sub-agent's
+> direct output, while the main SRE Agent may summarize or truncate responses.
+> To invoke in regular chat, type `/agent` and select your sub-agent.
 
 ## How to Contribute
 
@@ -75,7 +76,7 @@ We use [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
 docs/subagents/<subagent-name>/
-├── subagent.yaml           # System prompt (paste into Subagent Builder)
+├── subagent.yaml           # Field values for Subagent builder
 ├── README.md               # Documentation and test prompts
 ├── demo-flow.md            # Step-by-step demo script
 ├── advisor-impact-report.md # Example report (if applicable)
@@ -89,7 +90,7 @@ docs/subagents/<subagent-name>/
    application-specific logic in `subagent.yaml` or knowledge files
 2. **Discover, don't assume** — always use discovery commands to detect the
    environment state
-3. **Test with real prompts** — every change should be tested in Playground
+3. **Test with real prompts** — every change should be tested in the Test playground
 4. **Update documentation** — if you change behavior, update README and demo-flow
 5. **State sources** — for cost data, always indicate which source was used
 6. **Handle failures gracefully** — if a command or API is unavailable, the

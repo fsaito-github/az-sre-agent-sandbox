@@ -64,19 +64,33 @@ whether it's **safe to execute now** nor produce an operational plan.
 
 ### 1. Create the Sub-Agent
 
-1. Open the SRE Agent in the [Azure Portal](https://aka.ms/sreagent/portal)
-2. Go to **Builder** → **Subagent Builder**
-3. Click **+ Create subagent**
-4. Paste the contents of [`subagent.yaml`](subagent.yaml)
-5. Save and test in the **Playground**
+1. Open your SRE Agent in the [Azure Portal](https://aka.ms/sreagent/portal)
+2. Go to the **Subagent builder** tab
+3. Click **Create** → select **Subagent**
+4. Fill in the fields using the values from [`subagent.yaml`](subagent.yaml):
+
+   | Portal Field | Value from subagent.yaml |
+   |-------------|------------------------|
+   | **Name** | `Advisor Impact Analyzer` |
+   | **Instructions** | Copy the `system_prompt` content |
+   | **Handoff Description** | Copy the `handoff_description` content |
+   | **Built-in Tools** | Select: Azure CLI, Log Analytics/Kusto query, Python code execution |
+   | **Agent Type** | `Review` |
+
+5. Enable **Knowledge base** (see step 2 below)
+6. Click **Save**
+7. Test in the **Test playground** (view toggle in the Subagent builder)
+
+> **Tip:** To invoke the subagent in chat, type `/agent`, select
+> **Advisor Impact Analyzer**, and ask your question.
 
 ### 2. Upload the Knowledge File
 
 The knowledge file teaches the agent to **investigate** impact dynamically.
 It works in ANY environment.
 
-1. In the SRE Agent portal, go to **Builder** → **Knowledge Base**
-2. Click **Add file** and upload:
+1. In the SRE Agent portal, go to **Settings** → **Knowledge Base** → **Files**
+2. Drag and drop or browse to upload:
 
 | File | Contents |
 |------|----------|

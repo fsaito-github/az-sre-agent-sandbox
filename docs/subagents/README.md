@@ -17,11 +17,12 @@ The Azure SRE Agent already excels at incident diagnosis, automated remediation,
 ## Quick Start
 
 1. Open your SRE Agent in the [Azure Portal](https://aka.ms/sreagent/portal)
-2. Go to **Builder** → **Subagent Builder**
-3. Click **+ Create subagent**
-4. Copy the contents of the `subagent.yaml` file from the desired sub-agent folder
-5. Paste into the builder and save
-6. Test in the **Playground** using the prompts from the sub-agent's README
+2. Go to the **Subagent builder** tab
+3. Click **Create** → select **Subagent**
+4. Fill in the portal fields (Name, Instructions, Handoff Description, Tools, Agent Type) using the values from the `subagent.yaml` file in the desired sub-agent folder
+5. If the sub-agent has a `knowledge/` folder, upload the files via **Settings** → **Knowledge Base** → **Files** and enable Knowledge base on the subagent
+6. Click **Save** and test in the **Test playground** (view toggle in the Subagent builder)
+7. To invoke in chat, type `/agent` and select your sub-agent
 
 ## Demo Recommendations
 
