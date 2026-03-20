@@ -80,23 +80,38 @@ whether it's **safe to execute now** nor produce an operational plan.
 5. Enable **Knowledge base** (see step 2 below)
 6. Click **Save**
 7. Test in the **Test playground** (view toggle in the Subagent builder)
+8. Run **Evaluate** in the playground to check prompt quality (aim for Overall > 80)
 
 > **Tip:** To invoke the subagent in chat, type `/agent`, select
 > **Advisor Impact Analyzer**, and ask your question.
+>
+> **Tip:** Use "Refine with AI" in the playground to get AI-powered
+> suggestions for improving your instructions and handoff description.
 
-### 2. Upload the Knowledge File
+### 2. Upload Knowledge Files
 
-The knowledge file teaches the agent to **investigate** impact dynamically.
-It works in ANY environment.
+The knowledge files teach the agent HOW to investigate — they don't contain
+pre-built answers. Upload all files for best results.
 
 1. In the SRE Agent portal, go to **Settings** → **Knowledge Base** → **Files**
-2. Drag and drop or browse to upload:
+2. Drag and drop or browse to upload all files from the `knowledge/` folder:
 
-| File | Contents |
-|------|----------|
-| [`impact-investigation-framework.md`](knowledge/impact-investigation-framework.md) | Investigation framework: how to detect environment profiles, discover dependencies, assess risk by recommendation type, and build impact tables using real data |
+| File | Purpose |
+|------|---------|
+| [`discovery-procedures.md`](knowledge/discovery-procedures.md) | How to discover and inventory workloads (K8s, PaaS, hybrid) |
+| [`dependency-mapping.md`](knowledge/dependency-mapping.md) | How to map dependencies (App Insights KQL, env vars, endpoints) |
+| [`risk-classification.md`](knowledge/risk-classification.md) | Risk levels, amplifiers, and reference table by recommendation type |
+| [`cost-analysis.md`](knowledge/cost-analysis.md) | 3-source cost pipeline (Retail Prices API, Advisor, Cost Management) |
+| [`k8s-recommendations.md`](knowledge/k8s-recommendations.md) | K8s-specific analysis (security, network, node pools) |
+| [`paas-recommendations.md`](knowledge/paas-recommendations.md) | PaaS-specific analysis (App Service, SQL, Redis, Storage, Functions) |
+| [`impact-table-guide.md`](knowledge/impact-table-guide.md) | Output format, cascade chains, validation, executive summary |
 
-3. Wait for indexing (usually < 1 minute)
+3. Enable **Knowledge base** on the subagent in the Subagent builder
+4. Wait for indexing (usually < 1 minute per file)
+
+> **Why multiple files?** The SRE Agent uses semantic search (RAG) to find
+> relevant knowledge. Focused files per topic yield better retrieval than
+> one large monolithic file.
 
 ### How the Integration Works
 

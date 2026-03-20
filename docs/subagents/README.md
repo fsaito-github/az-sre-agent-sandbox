@@ -51,12 +51,18 @@ The Azure SRE Agent already excels at incident diagnosis, automated remediation,
 docs/subagents/
 ├── README.md                    # This file
 ├── advisor-impact-analyzer/
-│   ├── subagent.yaml           # Paste into Subagent Builder
+│   ├── subagent.yaml           # Field values for Subagent builder
 │   ├── README.md               # Documentation & test prompts
 │   ├── demo-flow.md            # Step-by-step demo script
-│   ├── advisor-impact-report.md # Example report (from AKS Pet Store lab)
-│   └── knowledge/
-│       └── impact-investigation-framework.md  # Upload to Knowledge Base
+│   ├── advisor-impact-report.md # Example report
+│   └── knowledge/              # Upload ALL to Knowledge Base
+│       ├── discovery-procedures.md
+│       ├── dependency-mapping.md
+│       ├── risk-classification.md
+│       ├── cost-analysis.md
+│       ├── k8s-recommendations.md
+│       ├── paas-recommendations.md
+│       └── impact-table-guide.md
 ├── slo-guardian/
 │   ├── subagent.yaml           # Paste into Subagent Builder
 │   ├── README.md               # Documentation & test prompts

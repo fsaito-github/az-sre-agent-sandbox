@@ -30,11 +30,19 @@ Since subagents run inside the Azure SRE Agent platform, testing requires:
 2. Go to the **Subagent builder** tab and select your subagent
 3. Update the portal fields (Instructions, Handoff Description, Tools) with the new values from `subagent.yaml`
 4. Test in the **Test playground** (view toggle in the Subagent builder) with the prompts from the subagent's README
-5. If updating a knowledge file, re-upload it via **Settings** → **Knowledge Base** → **Files**
+5. If updating knowledge files, re-upload them via **Settings** → **Knowledge Base** → **Files**
+6. **Run AI Evaluation**: In the Test playground, click **Evaluate** after a few test conversations. Check the scores:
+   - **Overall** > 80: good to go
+   - **Prompt clarity** > 4: instructions are clear
+   - **Tool fit** > 4: right tools configured
+   - If scores are low, use **"Refine with AI"** or **"View AI suggestions"** to improve
 
 > **Tip:** Test in the Test playground first. The playground gives the sub-agent's
 > direct output, while the main SRE Agent may summarize or truncate responses.
 > To invoke in regular chat, type `/agent` and select your sub-agent.
+
+> **Important:** For prompt changes, always run AI Evaluation before submitting
+> a PR. Include the evaluation scores in your PR description.
 
 ## How to Contribute
 
@@ -81,7 +89,13 @@ docs/subagents/<subagent-name>/
 ├── demo-flow.md            # Step-by-step demo script
 ├── advisor-impact-report.md # Example report (if applicable)
 └── knowledge/              # Knowledge files (upload to Knowledge Base)
-    └── *.md
+    ├── discovery-procedures.md
+    ├── dependency-mapping.md
+    ├── risk-classification.md
+    ├── cost-analysis.md
+    ├── k8s-recommendations.md
+    ├── paas-recommendations.md
+    └── impact-table-guide.md
 ```
 
 ### Guidelines for Subagent Changes
