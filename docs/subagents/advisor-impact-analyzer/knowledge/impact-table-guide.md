@@ -57,6 +57,10 @@ If cost unknown: **💰 Cost impact: ⚠️ Unknown — verify pricing for <reso
 
 1. Include ALL workloads discovered in discovery step — do NOT omit any
 2. "Current Status" MUST come from real discovery output, never guessed
+   - If kubectl and telemetry are both unavailable, use `az aks nodepool list`
+     to check node count. If count=0: mark as "⚠️ Not running (pool scaled to 0)"
+   - If telemetry returns ZERO_ROWS: mark as "⚠️ Unverified (no telemetry)"
+   - NEVER write "✅ Running (2/2)" without evidence from kubectl, KQL, or az aks
 3. Unaffected workloads MUST appear with "✅ No impact" (positive confirmation)
 4. "Auto-recovers?" values:
    - **Yes**: restarts and works on its own

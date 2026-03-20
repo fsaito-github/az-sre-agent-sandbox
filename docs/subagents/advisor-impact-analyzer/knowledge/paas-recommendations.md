@@ -102,10 +102,21 @@ az functionapp function list --name <func> --resource-group <rg> -o table 2>/dev
 
 **Investigation:**
 ```bash
+# ACR
 az acr show --name <acr> --query "{sku:sku.name, adminEnabled:adminUserEnabled}" -o json 2>/dev/null
-az keyvault show --name <kv> --query "{softDelete:properties.enableSoftDelete, purgeProtection:properties.enablePurgeProtection}" -o json 2>/dev/null
+
+# Key Vault — use generic resource API (az keyvault show may not be supported)
+az resource show --resource-group <rg> --name <kv> \
+  --resource-type Microsoft.KeyVault/vaults \
+  --query "{softDelete:properties.enableSoftDelete, purgeProtection:properties.enablePurgeProtection, publicAccess:properties.publicNetworkAccess}" -o json 2>/dev/null
+
+# Storage Account
 az storage account show --name <sa> --query "{sku:sku.name, kind:kind, accessTier:accessTier}" -o json 2>/dev/null
 ```
+
+> **Note:** `az keyvault show` may fail with "Unsupported subcommands" in some
+> environments. Always use `az resource show --resource-type Microsoft.KeyVault/vaults`
+> as the primary approach.
 
 **General rule:** Changes to supporting resources (ACR SKU, KV settings,
 monitoring, storage tier) almost NEVER affect running workloads. Impact is:

@@ -11,10 +11,21 @@ The most accurate source — shows ACTUAL runtime calls between services
 with volume, latency, and failure rates. Same data that powers the
 Azure Portal Application Map.
 
+### Prerequisites check
+Before running queries, verify App Insights is instrumented:
+```bash
+az monitor app-insights component show --resource-group <rg> \
+  --query "[].{name:name, instrumentationKey:instrumentationKey, connectionString:connectionString}" -o table 2>/dev/null
+```
+If no components found → skip to Method 2.
+
+### Queries (use timespan 7d for low-traffic environments)
+
 ```kql
-// Full dependency map: who calls whom (last 24h)
+// Full dependency map: who calls whom (last 7 days)
+// Use 7d instead of 24h to catch infrequent dependencies
 dependencies
-| where timestamp > ago(24h)
+| where timestamp > ago(7d)
 | summarize
     CallCount=count(),
     AvgDuration=avg(duration),
@@ -35,8 +46,9 @@ dependencies
 
 ```kql
 // Discover all unique service roles
-union requests, dependencies
-| where timestamp > ago(24h)
+union requests, dependencies, traces
+| where timestamp > ago(7d)
+| where isnotempty(cloud_RoleName)
 | distinct cloud_RoleName
 | order by cloud_RoleName asc
 ```
@@ -44,12 +56,21 @@ union requests, dependencies
 ```kql
 // External dependencies (outside cluster/app)
 dependencies
-| where timestamp > ago(24h)
+| where timestamp > ago(7d)
 | where dependency_Type !in ("InProc", "")
 | summarize CallCount=count(), FailRate=round(100.0*countif(success == false)/count(), 1)
     by Target=target, Type=dependency_Type
 | order by CallCount desc
 ```
+
+### Troubleshooting ZERO_ROWS
+If queries return empty:
+1. Verify App Insights exists: `az monitor app-insights component show --resource-group <rg>`
+2. Check if workloads have instrumentation configured (connection string in env vars)
+3. Try broader timespan: change `ago(7d)` to `ago(30d)`
+4. Try `union requests, traces | where timestamp > ago(7d) | take 5` to test basic connectivity
+5. If still empty → app is not instrumented. Note: "⚠️ App Insights has no telemetry —
+   dependency map is based on configuration only, not runtime data"
 
 **Why this is better than env vars:**
 - Shows ACTUAL calls, not just configured connections
@@ -58,7 +79,8 @@ dependencies
 - Shows which deps are healthy vs failing right now
 
 **When NOT available:** Queries return empty or fail → fall back to Methods 2-4.
-Note: "⚠️ App Insights not configured — dependency map based on infrastructure discovery only"
+Note: "⚠️ App Insights not configured or no telemetry — dependency map based
+on infrastructure discovery only. Runtime behavior unverified."
 
 ---
 

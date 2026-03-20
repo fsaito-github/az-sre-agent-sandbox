@@ -28,6 +28,8 @@ If both fail partially → Profile D (note what you could not verify).
 
 ## Profile A — Kubernetes (AKS)
 
+### Primary: kubectl (if available)
+
 ```bash
 # 1. Discover ALL namespaces with workloads (do NOT assume a namespace)
 kubectl get pods --all-namespaces --no-headers | awk '{print $1}' | sort -u
@@ -42,8 +44,62 @@ kubectl get daemonsets -n <ns> 2>/dev/null
 kubectl get hpa -n <ns> 2>/dev/null
 kubectl get ingress -n <ns> 2>/dev/null
 kubectl get networkpolicy -n <ns> 2>/dev/null
+```
 
-# 3. Security posture per container
+### Fallback: kubectl unavailable → use az aks + KQL
+
+If `RunKubectlReadCommand` returns "Function not available" or errors,
+use these alternatives:
+
+```bash
+# AKS cluster details
+az aks show --resource-group <rg> --name <aks> \
+  --query "{k8sVersion:kubernetesVersion, fqdn:fqdn, networkPlugin:networkProfile.networkPlugin, privateFqdn:privateFqdn}" -o json
+
+# Node pools (replaces kubectl get nodes)
+az aks nodepool list --resource-group <rg> --cluster-name <aks> \
+  --query "[].{name:name, vmSize:vmSize, count:count, minCount:minCount, maxCount:maxCount, mode:mode, osType:osType}" -o table
+
+# Run kubectl remotely via az aks command invoke
+az aks command invoke --resource-group <rg> --name <aks> \
+  --command "kubectl get pods --all-namespaces -o wide" 2>/dev/null
+
+az aks command invoke --resource-group <rg> --name <aks> \
+  --command "kubectl get svc --all-namespaces" 2>/dev/null
+```
+
+If `az aks command invoke` also fails, use KQL against ContainerInsights:
+
+```kql
+// Pod inventory (replaces kubectl get pods)
+KubePodInventory
+| where TimeGenerated > ago(1h)
+| where ClusterName == "<aks-cluster-name>"
+| summarize arg_max(TimeGenerated, *) by Name, Namespace
+| project Namespace, Name, PodStatus, ContainerCount=PodCreationTimeStamp
+| order by Namespace asc, Name asc
+
+// Node inventory (replaces kubectl get nodes)
+KubeNodeInventory
+| where TimeGenerated > ago(1h)
+| where ClusterName == "<aks-cluster-name>"
+| summarize arg_max(TimeGenerated, *) by Computer
+| project Computer, Status, KubeletVersion, KubernetesProviderID
+
+// Service inventory
+KubeServices
+| where TimeGenerated > ago(1h)
+| where ClusterName == "<aks-cluster-name>"
+| summarize arg_max(TimeGenerated, *) by ServiceName, Namespace
+| project Namespace, ServiceName, ServiceType, ClusterIP
+```
+
+**⚠️ IMPORTANT**: If nodepool count=0 (workload pool not scaled), mark
+the environment as "⚠️ Workload pool not running — topology is config-based
+only, not validated at runtime".
+
+# 3. Security posture per container (requires kubectl)
+# If kubectl unavailable, skip — note in report as unverified
 kubectl get pods -n <ns> -o json | python3 -c "
 import json, sys
 pods = json.load(sys.stdin)['items']
@@ -56,9 +112,10 @@ for pod in pods:
         print(f'{name}/{c[\"name\"]}: image={img} runAsNonRoot={sc.get(\"runAsNonRoot\",\"NOT SET\")} readOnlyRootFs={sc.get(\"readOnlyRootFilesystem\",\"NOT SET\")} limits={res.get(\"limits\",\"NOT SET\")}')
 "
 
-# 4. Cluster-level
+# 4. Cluster-level (kubectl or az aks)
 kubectl get nodes -o wide
 kubectl top nodes 2>/dev/null
+# Fallback: az aks nodepool list (see above)
 ```
 
 ---
