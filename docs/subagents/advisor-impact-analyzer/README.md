@@ -21,9 +21,11 @@ The **Advisor Impact Analyzer** transforms a vague Advisor recommendation into
 a **complete execution plan with risk analysis**, including:
 
 - Dynamic discovery of workloads and their dependencies
+- **Multi-RG support** including AKS managed resource groups (MC_*)
 - Downtime estimation based on real environment state
 - Blast radius mapping (affected workloads and end users)
 - Risk classification (🟢 Safe → 🔴 High Risk)
+- **Rollback assessment** per recommendation (✅ Reversible / ⚠️ Complex / ❌ Irreversible)
 - **💰 Cost impact analysis** with real-time pricing from Azure Retail Prices API
 - Step-by-step plan with pre-checks, execution, post-checks, and rollback
 - Timing recommendation (maintenance window or immediate execution)
@@ -123,30 +125,31 @@ pre-built answers. Upload all files for best results.
 User: "Analyze the Advisor recommendations"
     │
     ↓
-SRE Agent (main)
-    │
-    ├── handoff_description match → invokes Advisor Impact Analyzer
+SRE Agent (main)  — or user types /agent Advisor Impact Analyzer
     │
     ↓
 Advisor Impact Analyzer (sub-agent)
     │
-    ├── 1. DETECTS environment profile (K8s, PaaS, hybrid)
-    ├── 2. DISCOVERS real environment state:
-    │       ├── kubectl/az → workloads, replicas, security posture
-    │       ├── services/endpoints → exposure (LB vs ClusterIP vs private)
-    │       ├── App Insights KQL → runtime dependency map (preferred)
-    │       └── env vars/connection strings → dependencies (fallback)
-    ├── 3. CLASSIFIES workloads by role (customer-facing, data store, etc.)
-    ├── 4. Consults Knowledge Base (impact-investigation-framework.md)
-    │       → Framework teaches HOW to investigate, not pre-built answers
-    ├── 5. REASONS about impact using discovered data
-    ├── 6. ASSESSES cost impact using real-time pricing data
-    ├── 7. Generates impact table PER WORKLOAD with real data
+    ├── 1. COLLECT — Fetch Advisor recommendations (subscription-level,
+    │       covers user RGs + AKS managed MC_* RGs)
+    ├── 2. DISCOVER — Build environment inventory:
+    │       ├── az resource list / az aks show → workloads, SKUs, node pools
+    │       ├── MC_ managed RG → VMSS, LBs, disks
+    │       └── Fallbacks: az aks command invoke, KQL ContainerInsights
+    ├── 3. PRICE LOOKUP — Batch queries to Azure Retail Prices API
+    │       (2-4 calls by resource type, not per recommendation)
+    ├── 4. QUICK SUMMARY — Executive Summary table with risk, cost, rollback
+    │       per recommendation. Delivered FAST.
+    ├── 5. DEEP ANALYSIS (on user request) — For specific recommendations:
+    │       ├── Dependency mapping (App Insights KQL preferred)
+    │       ├── Workload impact table with Auto-recovers? and Rollback
+    │       ├── Cascade chain and post-execution validation
+    │       └── Refined cost from Retail Prices API
     │
     ↓
 Returns analysis to chat
     │
-    ├── User can request deep-dive on a specific recommendation
+    ├── User can request deep-dive by recommendation number
     ├── User can request execution (handoff to main SRE Agent)
     └── User can request analysis from another sub-agent:
         ├── Security Auditor → deeper security recommendation audit
