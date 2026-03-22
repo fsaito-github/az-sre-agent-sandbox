@@ -13,6 +13,7 @@ The Azure SRE Agent already excels at incident diagnosis, automated remediation,
 | [📋 PIR Generator](pir-generator/) | Structured Post-Incident Review documents (timeline, RCA, action items) | Diagnoses incidents but doesn't generate formal post-mortems |
 | [🔐 Security Posture Auditor](security-auditor/) | Proactive K8s security audit (CIS benchmark, secrets, RBAC, network policies) | Diagnoses incidents, doesn't audit compliance |
 | [🔍 Advisor Impact Analyzer](advisor-impact-analyzer/) | Dynamically discovers workloads and dependencies in any Azure environment, then analyzes operational impact of Advisor recommendations with execution plans and rollback | Doesn't bridge Advisor recommendations to safe execution |
+| [🛡️ WARA Reliability Checker](wara-reliability-checker/) | Automated Well-Architected Reliability Assessment using APRL Resource Graph queries with scoring, blast radius, cost, and scheduled execution | No built-in WARA / proactive reliability scoring |
 
 ## Quick Start
 
